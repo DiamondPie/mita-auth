@@ -1,0 +1,42 @@
+{
+  "name": "@mita/vue",
+  "version": "0.0.0",
+  "description": "Thin Vue 3 bindings (useStore) over @mita/client's nanostores state.",
+  "license": "MIT",
+  "author": "DiamondPie <thelostdiamondpie@outlook.com>",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@mita/client": "workspace:*",
+    "@nanostores/vue": "^1.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.0.0"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.11.1",
+    "vue": "^3.5.40"
+  }
+}

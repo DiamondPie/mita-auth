@@ -1,0 +1,43 @@
+{
+  "name": "@mita/react",
+  "version": "0.0.0",
+  "description": "Thin React 18+ bindings (useStore) over @mita/client's nanostores state.",
+  "license": "MIT",
+  "author": "DiamondPie <thelostdiamondpie@outlook.com>",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@mita/client": "workspace:*",
+    "@nanostores/react": "^1.1.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "happy-dom": "^20.11.1",
+    "react": "^19.2.8"
+  }
+}
