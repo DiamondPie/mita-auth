@@ -253,12 +253,59 @@ describe('turnstile', () => {
     expect(check.success).toBe(true);
   });
 
-  it('runs before the replay store', async () => {
+  it('rejects a missing token before anything expensive runs', async () => {
+    const check = await guard({ turnstile: { secretKey: 'secret' }, dpop: true }).verify(
+      plainRequest(),
+    );
+
+    expect(check).toMatchObject({ success: false, reason: 'turnstile_missing' });
+    expect(commandNames()).toEqual(['evalsha']);
+  });
+
+  // Cloudflare accepts a token exactly once, and RFC 9449 guarantees a client's first
+  // request is turned away with `use_dpop_nonce`. Spending the token there would leave
+  // the mandated retry with nothing left to present.
+  it('does not spend the token on a proof carrying no nonce', async () => {
+    const check = await guard({ turnstile: { secretKey: 'secret' }, dpop: true }).verify(
+      await dpopRequest({ nonce: undefined }),
+    );
+
+    expect(check).toMatchObject({ success: false, reason: 'dpop_nonce_required' });
+    expect(siteverifyCalls).not.toHaveBeenCalled();
+  });
+
+  it('does not spend the token on a nonce the store does not recognise', async () => {
+    server.use(redisHandler({ getdel: null }));
+
+    const check = await guard({ turnstile: { secretKey: 'secret' }, dpop: true }).verify(
+      await dpopRequest(),
+    );
+
+    expect(check).toMatchObject({ success: false, reason: 'dpop_nonce_required' });
+    expect(siteverifyCalls).not.toHaveBeenCalled();
+  });
+
+  it('does not spend the token on a proof that fails verification', async () => {
+    const check = await guard({ turnstile: { secretKey: 'secret' }, dpop: true }).verify(
+      await dpopRequest({ method: 'DELETE' }),
+    );
+
+    expect(check).toMatchObject({ success: false, reason: 'dpop_invalid' });
+    expect(siteverifyCalls).not.toHaveBeenCalled();
+  });
+
+  // The nonce is gone by the time the token is refused, and the 403 carries no
+  // replacement. That resolves itself: the next attempt has no nonce to send, which is
+  // the one path guaranteed to hand one back without spending a token.
+  it('runs after the replay store', async () => {
     server.use(siteverifyHandler(false));
 
-    await guard({ turnstile: { secretKey: 'secret' }, dpop: true }).verify(await dpopRequest());
+    const check = await guard({ turnstile: { secretKey: 'secret' }, dpop: true }).verify(
+      await dpopRequest(),
+    );
 
-    expect(commandNames()).toEqual(['evalsha']);
+    expect(check).toMatchObject({ success: false, reason: 'turnstile_rejected' });
+    expect(commandNames()).toEqual(['evalsha', 'getdel', 'set']);
   });
 });
 

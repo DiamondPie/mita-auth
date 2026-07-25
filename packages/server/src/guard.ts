@@ -134,9 +134,16 @@ export interface SecurityGuard {
  * Composes rate limiting, Turnstile verification and DPoP replay protection into one
  * Web-standard `Request` -> `Response` check.
  *
- * Checks run cheapest-first: rate limiting needs one Redis round trip, Turnstile needs a
- * call to Cloudflare, and DPoP needs signature verification plus two more Redis
- * operations. Hostile traffic is therefore shed before it can spend the expensive ones.
+ * Everything that can reject a request without spending anything runs first: the rate
+ * limit, then the mere presence of a Turnstile token. Only then does the proof get
+ * verified and its nonce redeemed, and the token is finally spent at Cloudflare last.
+ *
+ * That last step is ordered by correctness rather than by cost. Cloudflare accepts a
+ * token exactly once, while RFC 9449 requires a client's first request to be rejected
+ * with `use_dpop_nonce` and retried. Verifying the token before the nonce would burn it
+ * on precisely the request that is guaranteed to be retried, leaving the client with no
+ * way to ever satisfy both checks at once. Deferring it also means a request carrying a
+ * bad proof no longer costs a round trip to Cloudflare.
  */
 export function createSecurityGuard(options: CreateSecurityGuardOptions): SecurityGuard {
   const { rateLimit = {}, turnstile, dpop, resolveUrl = (request) => request.url, now } = options;
@@ -183,116 +190,59 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
             );
       }
 
-      let challenge: TurnstileChallenge | undefined;
+      const token = turnstile === undefined ? null : request.headers.get(MITA_HEADERS.turnstile);
 
-      if (turnstile !== undefined) {
-        const outcome = await runTurnstile(request, turnstile, now?.(), decision.pending);
-
-        if (outcome.failure !== null) {
-          return outcome.failure;
-        }
-
-        challenge = outcome.challenge;
+      if (turnstile !== undefined && token === null && turnstile.required !== false) {
+        return failure('turnstile_missing', forbiddenResponse('turnstile_missing'), decision.pending);
       }
 
-      if (dpopOptions === undefined) {
-        return success(decision.identifier, new Headers(), decision.pending, undefined, challenge);
-      }
-
-      const proofHeader = request.headers.get(MITA_HEADERS.dpop);
-
-      if (proofHeader === null) {
-        if (dpopOptions.required === false) {
-          return success(decision.identifier, new Headers(), decision.pending, undefined, challenge);
-        }
-
-        return challengeFailure(
-          'dpop_missing',
-          'invalid_dpop_proof',
-          algorithms,
-          replayStore,
-          decision.pending,
-        );
-      }
-
-      let proof: DPoPProof;
-
-      try {
-        proof = await verifyDPoP(proofHeader, {
-          method: request.method,
-          url: resolveUrl(request),
-          ...(dpopOptions.maxAgeSeconds === undefined
-            ? {}
-            : { maxAgeSeconds: dpopOptions.maxAgeSeconds }),
-          ...(dpopOptions.clockToleranceSeconds === undefined
-            ? {}
-            : { clockToleranceSeconds: dpopOptions.clockToleranceSeconds }),
-          algorithms,
-          ...(now === undefined ? {} : { now: now() }),
-        });
-      } catch (cause) {
-        if (!isDPoPVerificationError(cause)) {
-          throw cause;
-        }
-
-        return challengeFailure(
-          'dpop_invalid',
-          'invalid_dpop_proof',
-          algorithms,
-          replayStore,
-          decision.pending,
-        );
-      }
-
-      // The proof echoes a nonce we cannot recognise on sight — it is opaque and unsigned
-      // by design — so its validity is settled entirely by the store.
-      if (proof.nonce === undefined) {
-        return challengeFailure(
-          'dpop_nonce_required',
-          'use_dpop_nonce',
-          algorithms,
-          replayStore,
-          decision.pending,
-        );
-      }
-
-      const redeemed = await replayStore.consumeNonce(proof.nonce);
-
-      if (!redeemed.ok) {
-        return redeemed.reason === 'unavailable'
-          ? failure('store_unavailable', unavailableResponse('store_unavailable'), decision.pending)
-          : challengeFailure(
-              'dpop_nonce_required',
-              'use_dpop_nonce',
+      const dpopOutcome =
+        dpopOptions === undefined
+          ? emptyDPoPOutcome
+          : await runDPoP({
+              request,
+              options: dpopOptions,
+              url: resolveUrl(request),
               algorithms,
               replayStore,
-              decision.pending,
-            );
+              now: now?.(),
+              pending: decision.pending,
+            });
+
+      if (dpopOutcome.failure !== null) {
+        return dpopOutcome.failure;
       }
 
-      const claimed = await replayStore.rememberProof({ jti: proof.jti, jkt: proof.jkt });
+      const turnstileOutcome = await runTurnstile(token, turnstile, now?.(), decision.pending);
 
-      if (!claimed.ok) {
-        return claimed.reason === 'unavailable'
-          ? failure('store_unavailable', unavailableResponse('store_unavailable'), decision.pending)
-          : challengeFailure(
-              'dpop_replayed',
-              'invalid_dpop_proof',
-              algorithms,
-              replayStore,
-              decision.pending,
-            );
+      if (turnstileOutcome.failure !== null) {
+        return turnstileOutcome.failure;
       }
 
-      const issued = await replayStore.issueNonce();
+      const { proof } = dpopOutcome;
+      const headers = new Headers();
 
-      if (!issued.ok) {
-        return failure('store_unavailable', unavailableResponse('store_unavailable'), decision.pending);
+      if (proof !== undefined) {
+        const issued = await replayStore.issueNonce();
+
+        if (!issued.ok) {
+          return failure(
+            'store_unavailable',
+            unavailableResponse('store_unavailable'),
+            decision.pending,
+          );
+        }
+
+        headers.set(MITA_HEADERS.dpopNonce, issued.nonce.value);
       }
 
-      const headers = new Headers({ [MITA_HEADERS.dpopNonce]: issued.nonce.value });
-
-      return success(decision.identifier, headers, decision.pending, proof, challenge);
+      return success(
+        decision.identifier,
+        headers,
+        decision.pending,
+        proof,
+        turnstileOutcome.challenge,
+      );
     },
   };
 }
@@ -305,20 +255,146 @@ interface TurnstileOutcome {
   challenge?: TurnstileChallenge;
 }
 
+interface DPoPOutcome {
+  /** Non-null when the request must be denied. */
+  failure: SecurityFailure | null;
+  /** Absent when DPoP is disabled, or optional and the request carried no proof. */
+  proof?: DPoPProof;
+}
+
+const emptyDPoPOutcome: DPoPOutcome = { failure: null };
+
+interface RunDPoPInput {
+  request: Request;
+  options: GuardDPoPOptions;
+  /** Public URL the proof must be bound to. */
+  url: string;
+  algorithms: readonly DPoPAlgorithm[];
+  replayStore: ReplayStore;
+  now: number | undefined;
+  pending: Promise<unknown>;
+}
+
+async function runDPoP({
+  request,
+  options,
+  url,
+  algorithms,
+  replayStore,
+  now,
+  pending,
+}: RunDPoPInput): Promise<DPoPOutcome> {
+  const proofHeader = request.headers.get(MITA_HEADERS.dpop);
+
+  if (proofHeader === null) {
+    return options.required === false
+      ? emptyDPoPOutcome
+      : {
+          failure: await challengeFailure(
+            'dpop_missing',
+            'invalid_dpop_proof',
+            algorithms,
+            replayStore,
+            pending,
+          ),
+        };
+  }
+
+  let proof: DPoPProof;
+
+  try {
+    proof = await verifyDPoP(proofHeader, {
+      method: request.method,
+      url,
+      ...(options.maxAgeSeconds === undefined ? {} : { maxAgeSeconds: options.maxAgeSeconds }),
+      ...(options.clockToleranceSeconds === undefined
+        ? {}
+        : { clockToleranceSeconds: options.clockToleranceSeconds }),
+      algorithms,
+      ...(now === undefined ? {} : { now }),
+    });
+  } catch (cause) {
+    if (!isDPoPVerificationError(cause)) {
+      throw cause;
+    }
+
+    return {
+      failure: await challengeFailure(
+        'dpop_invalid',
+        'invalid_dpop_proof',
+        algorithms,
+        replayStore,
+        pending,
+      ),
+    };
+  }
+
+  // The proof echoes a nonce we cannot recognise on sight — it is opaque and unsigned
+  // by design — so its validity is settled entirely by the store.
+  if (proof.nonce === undefined) {
+    return {
+      failure: await challengeFailure(
+        'dpop_nonce_required',
+        'use_dpop_nonce',
+        algorithms,
+        replayStore,
+        pending,
+      ),
+    };
+  }
+
+  const redeemed = await replayStore.consumeNonce(proof.nonce);
+
+  if (!redeemed.ok) {
+    return {
+      failure:
+        redeemed.reason === 'unavailable'
+          ? failure('store_unavailable', unavailableResponse('store_unavailable'), pending)
+          : await challengeFailure(
+              'dpop_nonce_required',
+              'use_dpop_nonce',
+              algorithms,
+              replayStore,
+              pending,
+            ),
+    };
+  }
+
+  const claimed = await replayStore.rememberProof({ jti: proof.jti, jkt: proof.jkt });
+
+  if (!claimed.ok) {
+    return {
+      failure:
+        claimed.reason === 'unavailable'
+          ? failure('store_unavailable', unavailableResponse('store_unavailable'), pending)
+          : await challengeFailure(
+              'dpop_replayed',
+              'invalid_dpop_proof',
+              algorithms,
+              replayStore,
+              pending,
+            ),
+    };
+  }
+
+  return { failure: null, proof };
+}
+
+/**
+ * Spends the token with Cloudflare.
+ *
+ * A `null` token means there is nothing to verify: either Turnstile is off, or it is
+ * optional and the request carried none. The required-but-absent case never reaches here,
+ * having been rejected before any of the expensive checks ran.
+ */
 async function runTurnstile(
-  request: Request,
-  options: GuardTurnstileOptions,
+  token: string | null,
+  options: GuardTurnstileOptions | undefined,
   now: number | undefined,
   pending: Promise<unknown>,
 ): Promise<TurnstileOutcome> {
-  const token = request.headers.get(MITA_HEADERS.turnstile);
-
-  if (token === null) {
-    return options.required === false
-      ? { failure: null }
-      : {
-          failure: failure('turnstile_missing', forbiddenResponse('turnstile_missing'), pending),
-        };
+  if (options === undefined || token === null) {
+    return { failure: null };
   }
 
   const result = await verifyTurnstileToken({
