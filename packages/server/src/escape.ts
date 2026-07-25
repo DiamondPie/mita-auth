@@ -14,16 +14,24 @@
  * `@mita/server/sanitize` subpath export, keeping this module as the universal path.
  */
 
-/** `&#39;` rather than `&apos;`, which HTML 4 never defined. */
-const HTML_ENTITIES = new Map([
-  ['&', '&amp;'],
-  ['<', '&lt;'],
-  ['>', '&gt;'],
-  ['"', '&quot;'],
-  ["'", '&#39;'],
-]);
-
 const HTML_ESCAPE_PATTERN = /["&'<>]/g;
+
+function toEntity(character: string): string {
+  switch (character) {
+    case '&':
+      return '&amp;';
+    case '<':
+      return '&lt;';
+    case '>':
+      return '&gt;';
+    case '"':
+      return '&quot;';
+    // The apostrophe is all that the pattern can still match. `&apos;` is left alone
+    // because HTML 4 never defined it.
+    default:
+      return '&#39;';
+  }
+}
 
 /**
  * Escapes the five characters that can break out of an HTML text node or a quoted
@@ -39,8 +47,5 @@ const HTML_ESCAPE_PATTERN = /["&'<>]/g;
  * literally, so escape either on write or on render, never both.
  */
 export function escapeHtml(value: string): string {
-  return value.replace(
-    HTML_ESCAPE_PATTERN,
-    (character) => HTML_ENTITIES.get(character) ?? character,
-  );
+  return value.replace(HTML_ESCAPE_PATTERN, toEntity);
 }
