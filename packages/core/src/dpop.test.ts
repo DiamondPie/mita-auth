@@ -212,11 +212,22 @@ describe('verifyDPoP', () => {
   });
 
   it.each([
-    ['not a jwt', 'dpop.malformed'],
-    ['a.b', 'dpop.malformed'],
-    ['', 'dpop.malformed'],
-  ])('rejects the malformed proof %j', async (proof, code) => {
-    await expect(verify(proof)).rejects.toMatchObject({ code });
+    'not a jwt',
+    'a.b',
+    '',
+    // Three base64url segments, so the shape check passes and the header decode fails.
+    'aaaa.bbbb.cccc',
+  ])('rejects the malformed proof %j', async (proof) => {
+    await expect(verify(proof)).rejects.toMatchObject({ code: 'dpop.malformed' });
+  });
+
+  it('rejects a proof whose standard claims are unacceptable', async () => {
+    const proof = await craft(
+      { alg: 'ES256', typ: DPOP_JWT_TYPE, jwk: await exportJWK(keyPair.publicKey) },
+      { exp: 1 },
+    );
+
+    await expect(verify(proof)).rejects.toMatchObject({ code: 'dpop.invalid_claims' });
   });
 
   it('throws a DPoPVerificationError so callers can branch on the class', async () => {
