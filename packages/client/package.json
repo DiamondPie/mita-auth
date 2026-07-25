@@ -39,6 +39,7 @@
     "nanostores": "^1.4.1"
   },
   "devDependencies": {
-    "happy-dom": "^20.11.1"
+    "happy-dom": "^20.11.1",
+    "msw": "^2.15.0"
   }
 }
