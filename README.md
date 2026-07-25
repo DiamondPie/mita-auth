@@ -3,7 +3,7 @@
 **A batteries-included, framework-agnostic authentication & anti-abuse protection SDK.**
 Write the core logic once, and it works across Next.js / Nuxt / React / Vue / vanilla JS — built to be reused across your personal site and every project after it.
 
-> Status: 🚧 In development — `@mita-auth/core`, `@mita-auth/server`, `@mita-auth/client` and `@mita-auth/react` are complete; the `@mita-auth/vue` bindings are next. Nothing is published to npm yet.
+> Status: 🚧 In development — all five packages (`@mita-auth/core`, `@mita-auth/server`, `@mita-auth/client`, `@mita-auth/react`, `@mita-auth/vue`) are complete; a Next.js + Nuxt playground for cross-framework validation is next. Nothing is published to npm yet.
 
 *[中文版 / Chinese version](./README_zh.md)*
 
