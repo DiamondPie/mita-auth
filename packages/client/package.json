@@ -29,8 +29,9 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:exports": "attw --pack .",
     "clean": "rimraf dist"
   },
   "dependencies": {
@@ -39,6 +40,7 @@
     "nanostores": "^1.4.1"
   },
   "devDependencies": {
+    "@mita/server": "workspace:*",
     "happy-dom": "^20.11.1",
     "msw": "^2.15.0"
   }
