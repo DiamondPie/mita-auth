@@ -1,4 +1,4 @@
-import { generateDPoPKeyPair, generateNonce, signDPoP, type DPoPKeyPair } from '@mita/core';
+import { generateDPoPKeyPair, generateNonce, signDPoP, type DPoPKeyPair } from '@mita-auth/core';
 import { Redis } from '@upstash/redis';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';

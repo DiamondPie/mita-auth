@@ -1,5 +1,5 @@
 /**
- * Wire-protocol header names shared by `@mita/client` and `@mita/server`.
+ * Wire-protocol header names shared by `@mita-auth/client` and `@mita-auth/server`.
  *
  * `dpop` and `dpopNonce` follow RFC 9449 verbatim; the Turnstile header is Mita-specific.
  * Header names are lowercase because the Fetch `Headers` API lowercases on lookup anyway.

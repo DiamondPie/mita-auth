@@ -11,7 +11,7 @@
  * sanitizer instead.
  *
  * TODO: ship the DOMPurify-backed allowlist sanitizer as the Node-only
- * `@mita/server/sanitize` subpath export, keeping this module as the universal path.
+ * `@mita-auth/server/sanitize` subpath export, keeping this module as the universal path.
  */
 
 const HTML_ESCAPE_PATTERN = /["&'<>]/g;

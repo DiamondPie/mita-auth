@@ -1,5 +1,5 @@
 {
-  "name": "@mita/client",
+  "name": "@mita-auth/client",
   "version": "0.0.0",
   "description": "Browser client: protected fetch (ky), reactive auth state (nanostores), <mita-turnstile> web component.",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@mita/core": "workspace:*",
+    "@mita-auth/core": "workspace:*",
     "ky": "^2.0.2",
     "nanostores": "^1.4.1"
   },

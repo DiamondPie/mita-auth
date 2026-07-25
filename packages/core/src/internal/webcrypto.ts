@@ -3,7 +3,7 @@ import { MitaError } from '../errors';
 /**
  * Resolves WebCrypto from the global scope.
  *
- * `@mita/core` deliberately never imports `node:crypto`: the same build has to run on
+ * `@mita-auth/core` deliberately never imports `node:crypto`: the same build has to run on
  * Node.js 22+, browsers, Cloudflare Workers, Deno and Vercel Edge.
  */
 export function getWebCrypto(): Crypto {
@@ -12,7 +12,7 @@ export function getWebCrypto(): Crypto {
   if (!webcrypto?.getRandomValues || !webcrypto.subtle) {
     throw new MitaError(
       'runtime.webcrypto_unavailable',
-      'WebCrypto is unavailable. @mita/core requires a runtime exposing globalThis.crypto (Node.js >= 22, modern browsers, Workers, Deno).',
+      'WebCrypto is unavailable. @mita-auth/core requires a runtime exposing globalThis.crypto (Node.js >= 22, modern browsers, Workers, Deno).',
     );
   }
 

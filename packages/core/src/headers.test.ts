@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DPOP_AUTH_SCHEME, MITA_HEADERS } from './headers';
 
 describe('MITA_HEADERS', () => {
-  // These names are the wire contract between @mita/client and @mita/server: renaming one
+  // These names are the wire contract between @mita-auth/client and @mita-auth/server: renaming one
   // silently breaks interoperability with already-deployed peers, so pin them here.
   it('pins the header names', () => {
     expect(MITA_HEADERS).toEqual({
