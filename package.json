@@ -17,15 +17,18 @@
     "test": "turbo run test",
     "lint": "eslint .",
     "typecheck": "turbo run typecheck",
+    "check:exports": "turbo run check:exports",
     "clean": "turbo run clean && rimraf node_modules",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "turbo run build && changeset publish"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@changesets/cli": "^2.31.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
     "rimraf": "^6.1.3",
