@@ -2,6 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    // @mita/core must run on Node, browsers, Workers and Deno alike. The WebWorker lib
+    // models exactly that surface: standard Web APIs without `document`/`window`, and
+    // `types: []` keeps @types/node from silently making Node-only APIs compile.
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
     "outDir": "dist",
     "rootDir": "src",
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
