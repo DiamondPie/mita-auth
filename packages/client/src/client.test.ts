@@ -1,0 +1,332 @@
+/**
+ * @vitest-environment node
+ *
+ * `createProtectedClient` touches no DOM. Running it under happy-dom would put that
+ * package's fetch and same-origin emulation between the test and msw, which is neither
+ * what ships to browsers nor what is under test here.
+ */
+import { MITA_HEADERS, generateDPoPKeyPair, verifyDPoP, type DPoPKeyPair } from '@mita-auth/core';
+import { HttpResponse, http } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createProtectedClient } from './client';
+import { $isAuthenticated, $turnstileStatus, resetMitaState, setTurnstileToken } from './state';
+
+const API_URL = 'https://api.test/comments';
+
+const server = setupServer();
+
+let keyPair: DPoPKeyPair;
+let attempts: Array<{ proof: string; turnstile: string | null }>;
+
+beforeAll(async () => {
+  server.listen({ onUnhandledRequest: 'error' });
+  keyPair = await generateDPoPKeyPair();
+});
+
+beforeEach(() => {
+  attempts = [];
+  resetMitaState();
+});
+
+afterEach(() => {
+  server.resetHandlers();
+});
+
+afterAll(() => {
+  server.close();
+});
+
+/** Answers with each response in turn, repeating the last one once the list runs out. */
+function queue(...responses: Array<() => Response>) {
+  let index = 0;
+
+  return http.all(API_URL, ({ request }) => {
+    attempts.push({
+      proof: request.headers.get(MITA_HEADERS.dpop) ?? '',
+      turnstile: request.headers.get(MITA_HEADERS.turnstile),
+    });
+
+    const respond = responses[Math.min(index, responses.length - 1)];
+    index += 1;
+
+    return respond?.();
+  });
+}
+
+function accepted(nonce?: string) {
+  return HttpResponse.json({ ok: true }, nonce === undefined ? {} : { headers: nonceHeader(nonce) });
+}
+
+function nonceChallenge(nonce: string) {
+  return challenge('use_dpop_nonce', 'dpop_nonce_required', nonceHeader(nonce));
+}
+
+function invalidProof() {
+  return challenge('invalid_dpop_proof', 'dpop_invalid');
+}
+
+function challenge(error: string, reason: string, headers: Record<string, string> = {}) {
+  return HttpResponse.json(
+    { error: reason },
+    {
+      status: 401,
+      headers: { 'www-authenticate': `DPoP error="${error}", algs="ES256"`, ...headers },
+    },
+  );
+}
+
+function nonceHeader(nonce: string) {
+  return { [MITA_HEADERS.dpopNonce]: nonce };
+}
+
+/** Retry delays are irrelevant to what is under test and would only slow the suite. */
+function client(options: Parameters<typeof createProtectedClient>[0] = {}) {
+  return createProtectedClient({ keyPair, retry: { delay: () => 0 }, ...options });
+}
+
+function proofAt(index: number, method = 'POST') {
+  return verifyDPoP(attempts[index]?.proof ?? '', { method, url: API_URL });
+}
+
+describe('createProtectedClient', () => {
+  it('rejects a nonsensical retry limit', () => {
+    expect(() => createProtectedClient({ nonceRetryLimit: -1 })).toThrow(
+      /non-negative integer/,
+    );
+  });
+
+  describe('dpop proofs', () => {
+    it('binds a proof to the request it is sent with', async () => {
+      server.use(queue(() => accepted('nonce-1')));
+
+      await client().post(API_URL).json();
+      const proof = await proofAt(0);
+
+      expect(proof.htm).toBe('POST');
+      expect(proof.htu).toBe(API_URL);
+      expect(proof.nonce).toBeUndefined();
+    });
+
+    it('echoes the issued nonce on the following request', async () => {
+      server.use(queue(() => accepted('nonce-1'), () => accepted('nonce-2')));
+
+      const api = client();
+      await api.post(API_URL).json();
+      await api.post(API_URL).json();
+
+      expect((await proofAt(1)).nonce).toBe('nonce-1');
+    });
+
+    it('signs a fresh proof for a backoff retry, since a jti is single-use', async () => {
+      server.use(queue(() => HttpResponse.json({}, { status: 503 }), () => accepted('nonce-1')));
+
+      await client().get(API_URL).json();
+      const [first, second] = await Promise.all([proofAt(0, 'GET'), proofAt(1, 'GET')]);
+
+      expect(attempts).toHaveLength(2);
+      expect(second.jti).not.toBe(first.jti);
+    });
+  });
+
+  describe('nonce handshake', () => {
+    it('resolves a cold start by re-signing with the offered nonce', async () => {
+      server.use(queue(() => nonceChallenge('nonce-1'), () => accepted('nonce-2')));
+
+      const response = await client().post(API_URL);
+      const [first, second] = await Promise.all([proofAt(0), proofAt(1)]);
+
+      expect(response.status).toBe(200);
+      expect(attempts).toHaveLength(2);
+      expect(first.nonce).toBeUndefined();
+      expect(second.nonce).toBe('nonce-1');
+      expect(second.jti).not.toBe(first.jti);
+    });
+
+    it('gives up rather than chasing a server that keeps asking for a nonce', async () => {
+      server.use(queue(() => nonceChallenge('nonce-1'), () => nonceChallenge('nonce-2')));
+      const onUnauthorized = vi.fn();
+
+      await expect(client({ onUnauthorized }).post(API_URL)).rejects.toThrow();
+
+      expect(attempts).toHaveLength(2);
+      expect(onUnauthorized).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'nonce_exhausted' }),
+      );
+    });
+
+    it('honours a raised retry limit', async () => {
+      server.use(
+        queue(
+          () => nonceChallenge('nonce-1'),
+          () => nonceChallenge('nonce-2'),
+          () => accepted('nonce-3'),
+        ),
+      );
+
+      const response = await client({ nonceRetryLimit: 2, retry: { limit: 3, delay: () => 0 } })
+        .post(API_URL);
+
+      expect(response.status).toBe(200);
+      expect(attempts).toHaveLength(3);
+      expect((await proofAt(2)).nonce).toBe('nonce-2');
+    });
+
+    it('does not handshake at all when the limit is zero', async () => {
+      server.use(queue(() => nonceChallenge('nonce-1')));
+
+      await expect(client({ nonceRetryLimit: 0 }).post(API_URL)).rejects.toThrow();
+
+      expect(attempts).toHaveLength(1);
+    });
+  });
+
+  describe('unauthorized', () => {
+    it('does not retry a proof the server called invalid', async () => {
+      server.use(queue(invalidProof));
+      const onUnauthorized = vi.fn();
+
+      await expect(client({ onUnauthorized }).post(API_URL)).rejects.toThrow();
+
+      expect(attempts).toHaveLength(1);
+      expect(onUnauthorized).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'invalid_dpop_proof' }),
+      );
+    });
+
+    it('reports a 401 carrying no DPoP challenge as merely unauthorized', async () => {
+      server.use(queue(() => HttpResponse.json({ error: 'nope' }, { status: 401 })));
+      const onUnauthorized = vi.fn();
+
+      await expect(client({ onUnauthorized }).post(API_URL)).rejects.toThrow();
+
+      expect(onUnauthorized).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'unauthorized' }),
+      );
+    });
+
+    it('leaves other rejections to the caller', async () => {
+      server.use(queue(() => HttpResponse.json({ error: 'turnstile_rejected' }, { status: 403 })));
+      const onUnauthorized = vi.fn();
+
+      await expect(client({ onUnauthorized }).post(API_URL)).rejects.toThrow();
+
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('session state', () => {
+    it('turns authenticated once a proof has been accepted', async () => {
+      server.use(queue(() => accepted('nonce-1')));
+
+      await client().post(API_URL).json();
+
+      expect($isAuthenticated.get()).toBe(true);
+    });
+
+    // Only a server that ran the DPoP path hands back a nonce, so a plain 200 proves
+    // nothing about this browser's key pair.
+    it('stays unauthenticated when the server issued no nonce', async () => {
+      server.use(queue(() => accepted()));
+
+      await client().post(API_URL).json();
+
+      expect($isAuthenticated.get()).toBe(false);
+    });
+
+    it('drops authentication when a proof is rejected', async () => {
+      server.use(queue(() => accepted('nonce-1'), invalidProof));
+
+      const api = client();
+      await api.post(API_URL).json();
+      await expect(api.post(API_URL)).rejects.toThrow();
+
+      expect($isAuthenticated.get()).toBe(false);
+    });
+  });
+
+  describe('turnstile', () => {
+    it('sends the stored token and marks it spent', async () => {
+      server.use(queue(() => accepted('nonce-1')));
+      setTurnstileToken('token-1');
+
+      await client().post(API_URL).json();
+
+      expect(attempts[0]?.turnstile).toBe('token-1');
+      expect($turnstileStatus.get()).toBe('spent');
+    });
+
+    // The server defers siteverify until the proof passes, so the token survives the
+    // handshake. Fetching a second one would need the visitor to solve another challenge.
+    it('carries the same token through the nonce handshake', async () => {
+      server.use(queue(() => nonceChallenge('nonce-1'), () => accepted('nonce-2')));
+      setTurnstileToken('token-1');
+
+      await client().post(API_URL).json();
+
+      expect(attempts.map((attempt) => attempt.turnstile)).toEqual(['token-1', 'token-1']);
+    });
+
+    it('sends no token header when the widget has none', async () => {
+      server.use(queue(() => accepted('nonce-1')));
+
+      await client().post(API_URL).json();
+
+      expect(attempts[0]?.turnstile).toBeNull();
+    });
+
+    it('leaves the token alone when turnstile is disabled', async () => {
+      server.use(queue(() => accepted('nonce-1')));
+      setTurnstileToken('token-1');
+
+      await client({ turnstile: false }).post(API_URL).json();
+
+      expect(attempts[0]?.turnstile).toBeNull();
+      expect($turnstileStatus.get()).toBe('solved');
+    });
+  });
+
+  describe('caller hooks', () => {
+    it('signs after the caller has finished rewriting the request', async () => {
+      server.use(queue(() => accepted('nonce-1')));
+      const seen = vi.fn();
+
+      await client({
+        hooks: {
+          beforeRequest: [
+            ({ request }) => {
+              seen(request.headers.get(MITA_HEADERS.dpop));
+            },
+          ],
+        },
+      })
+        .post(API_URL)
+        .json();
+
+      expect(seen).toHaveBeenCalledWith(null);
+      expect(attempts[0]?.proof).not.toBe('');
+    });
+
+    it('runs caller afterResponse hooks once the nonce has been taken', async () => {
+      server.use(queue(() => accepted('nonce-1'), () => accepted('nonce-2')));
+      const seen = vi.fn();
+
+      const api = client({
+        hooks: {
+          afterResponse: [
+            ({ response }) => {
+              seen(response.headers.get(MITA_HEADERS.dpopNonce));
+            },
+          ],
+        },
+      });
+
+      await api.post(API_URL).json();
+      await api.post(API_URL).json();
+
+      expect(seen).toHaveBeenNthCalledWith(1, 'nonce-1');
+      expect((await proofAt(1)).nonce).toBe('nonce-1');
+    });
+  });
+});

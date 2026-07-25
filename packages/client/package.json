@@ -5,7 +5,7 @@
   "license": "MIT",
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": ["./dist/turnstile.mjs", "./dist/turnstile.cjs"],
   "files": ["dist"],
   "exports": {
     ".": {
@@ -18,19 +18,35 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./turnstile": {
+      "import": {
+        "types": "./dist/turnstile.d.mts",
+        "default": "./dist/turnstile.mjs"
+      },
+      "require": {
+        "types": "./dist/turnstile.d.cts",
+        "default": "./dist/turnstile.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
+  "typesVersions": {
+    "*": {
+      "turnstile": ["./dist/turnstile.d.cts"]
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:exports": "attw --pack .",
     "clean": "rimraf dist"
   },
   "dependencies": {
@@ -39,6 +55,8 @@
     "nanostores": "^1.4.1"
   },
   "devDependencies": {
-    "happy-dom": "^20.11.1"
+    "@mita-auth/server": "workspace:*",
+    "happy-dom": "^20.11.1",
+    "msw": "^2.15.0"
   }
 }
