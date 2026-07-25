@@ -54,6 +54,12 @@ export type SecurityCheck =
       readonly reason: SecurityFailureReason;
       /** Ready to return from a Route Handler as-is. */
       readonly response: Response;
+      /**
+       * Carried on rejections too: the rate limiter records analytics for denied requests
+       * as well, and those are the ones worth recording. Dropping it lets an Edge runtime
+       * tear the isolate down mid-write.
+       */
+      readonly pending: Promise<unknown>;
     };
 
 export interface GuardRateLimitOptions {
@@ -165,14 +171,22 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
 
       if (!decision.success) {
         return decision.degraded
-          ? failure('rate_limit_unavailable', unavailableResponse('rate_limit_unavailable'))
-          : failure('rate_limited', rateLimitedResponse(decision.limit, decision.reset));
+          ? failure(
+              'rate_limit_unavailable',
+              unavailableResponse('rate_limit_unavailable'),
+              decision.pending,
+            )
+          : failure(
+              'rate_limited',
+              rateLimitedResponse(decision.limit, decision.reset),
+              decision.pending,
+            );
       }
 
       let challenge: TurnstileChallenge | undefined;
 
       if (turnstile !== undefined) {
-        const outcome = await runTurnstile(request, turnstile, now?.());
+        const outcome = await runTurnstile(request, turnstile, now?.(), decision.pending);
 
         if (outcome.failure !== null) {
           return outcome.failure;
@@ -192,7 +206,13 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
           return success(decision.identifier, new Headers(), decision.pending, undefined, challenge);
         }
 
-        return challengeFailure('dpop_missing', 'invalid_dpop_proof', algorithms, replayStore);
+        return challengeFailure(
+          'dpop_missing',
+          'invalid_dpop_proof',
+          algorithms,
+          replayStore,
+          decision.pending,
+        );
       }
 
       let proof: DPoPProof;
@@ -215,35 +235,59 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
           throw cause;
         }
 
-        return challengeFailure('dpop_invalid', 'invalid_dpop_proof', algorithms, replayStore);
+        return challengeFailure(
+          'dpop_invalid',
+          'invalid_dpop_proof',
+          algorithms,
+          replayStore,
+          decision.pending,
+        );
       }
 
       // The proof echoes a nonce we cannot recognise on sight — it is opaque and unsigned
       // by design — so its validity is settled entirely by the store.
       if (proof.nonce === undefined) {
-        return challengeFailure('dpop_nonce_required', 'use_dpop_nonce', algorithms, replayStore);
+        return challengeFailure(
+          'dpop_nonce_required',
+          'use_dpop_nonce',
+          algorithms,
+          replayStore,
+          decision.pending,
+        );
       }
 
       const redeemed = await replayStore.consumeNonce(proof.nonce);
 
       if (!redeemed.ok) {
         return redeemed.reason === 'unavailable'
-          ? failure('store_unavailable', unavailableResponse('store_unavailable'))
-          : challengeFailure('dpop_nonce_required', 'use_dpop_nonce', algorithms, replayStore);
+          ? failure('store_unavailable', unavailableResponse('store_unavailable'), decision.pending)
+          : challengeFailure(
+              'dpop_nonce_required',
+              'use_dpop_nonce',
+              algorithms,
+              replayStore,
+              decision.pending,
+            );
       }
 
       const claimed = await replayStore.rememberProof({ jti: proof.jti, jkt: proof.jkt });
 
       if (!claimed.ok) {
         return claimed.reason === 'unavailable'
-          ? failure('store_unavailable', unavailableResponse('store_unavailable'))
-          : challengeFailure('dpop_replayed', 'invalid_dpop_proof', algorithms, replayStore);
+          ? failure('store_unavailable', unavailableResponse('store_unavailable'), decision.pending)
+          : challengeFailure(
+              'dpop_replayed',
+              'invalid_dpop_proof',
+              algorithms,
+              replayStore,
+              decision.pending,
+            );
       }
 
       const issued = await replayStore.issueNonce();
 
       if (!issued.ok) {
-        return failure('store_unavailable', unavailableResponse('store_unavailable'));
+        return failure('store_unavailable', unavailableResponse('store_unavailable'), decision.pending);
       }
 
       const headers = new Headers({ [MITA_HEADERS.dpopNonce]: issued.nonce.value });
@@ -265,13 +309,16 @@ async function runTurnstile(
   request: Request,
   options: GuardTurnstileOptions,
   now: number | undefined,
+  pending: Promise<unknown>,
 ): Promise<TurnstileOutcome> {
   const token = request.headers.get(MITA_HEADERS.turnstile);
 
   if (token === null) {
     return options.required === false
       ? { failure: null }
-      : { failure: failure('turnstile_missing', forbiddenResponse('turnstile_missing')) };
+      : {
+          failure: failure('turnstile_missing', forbiddenResponse('turnstile_missing'), pending),
+        };
   }
 
   const result = await verifyTurnstileToken({
@@ -292,12 +339,20 @@ async function runTurnstile(
   }
 
   if (result.reason === 'rejected') {
-    return { failure: failure('turnstile_rejected', forbiddenResponse('turnstile_rejected')) };
+    return {
+      failure: failure('turnstile_rejected', forbiddenResponse('turnstile_rejected'), pending),
+    };
   }
 
   return (options.failureMode ?? 'closed') === 'open'
     ? { failure: null }
-    : { failure: failure('turnstile_unavailable', unavailableResponse('turnstile_unavailable')) };
+    : {
+        failure: failure(
+          'turnstile_unavailable',
+          unavailableResponse('turnstile_unavailable'),
+          pending,
+        ),
+      };
 }
 
 /** Keeps a spent `jti` on record for at least as long as a proof stays acceptable. */
@@ -325,8 +380,12 @@ function success(
   };
 }
 
-function failure(reason: SecurityFailureReason, response: Response): SecurityFailure {
-  return { success: false, reason, response };
+function failure(
+  reason: SecurityFailureReason,
+  response: Response,
+  pending: Promise<unknown>,
+): SecurityFailure {
+  return { success: false, reason, response, pending };
 }
 
 /**
@@ -339,11 +398,12 @@ async function challengeFailure(
   error: string,
   algorithms: readonly DPoPAlgorithm[],
   replayStore: ReplayStore,
+  pending: Promise<unknown>,
 ): Promise<SecurityFailure> {
   const issued = await replayStore.issueNonce();
 
   if (!issued.ok) {
-    return failure('store_unavailable', unavailableResponse('store_unavailable'));
+    return failure('store_unavailable', unavailableResponse('store_unavailable'), pending);
   }
 
   const headers = new Headers({
@@ -351,7 +411,7 @@ async function challengeFailure(
     [MITA_HEADERS.dpopNonce]: issued.nonce.value,
   });
 
-  return failure(reason, problemResponse(401, reason, headers));
+  return failure(reason, problemResponse(401, reason, headers), pending);
 }
 
 function rateLimitedResponse(limit: number, reset: number): Response {

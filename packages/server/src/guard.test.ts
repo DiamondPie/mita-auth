@@ -476,6 +476,50 @@ describe('composition', () => {
     expect(check).toMatchObject({ success: false, reason: 'turnstile_rejected' });
   });
 
+  // The limiter records analytics for denied requests too, and a caller that never
+  // receives the promise cannot hand it to ctx.waitUntil() — the write dies with the
+  // isolate. Rejections are exactly the traffic analytics exists to capture.
+  describe('carries the limiter pending promise through every rejection', () => {
+    it.each([
+      {
+        path: 'rate limited',
+        verify: () => {
+          server.use(redisHandler({ evalsha: [-1, 10] }));
+          return guard().verify(plainRequest());
+        },
+      },
+      {
+        path: 'Turnstile rejected',
+        verify: () => {
+          server.use(siteverifyHandler(false));
+          return guard({ turnstile: { secretKey: 'secret' } }).verify(
+            plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }),
+          );
+        },
+      },
+      {
+        path: 'DPoP challenged',
+        verify: () => guard({ dpop: true }).verify(plainRequest()),
+      },
+      {
+        path: 'store unavailable',
+        verify: () => {
+          server.use(redisFailingAt(2));
+          return guard({ dpop: true }).verify(plainRequest());
+        },
+      },
+    ])('$path', async ({ verify }) => {
+      const check = await verify();
+
+      expect(check.success).toBe(false);
+      if (check.success) return;
+
+      // Resolves to undefined without analytics, so only settlement is asserted.
+      expect(check.pending).toBeInstanceOf(Promise);
+      await check.pending;
+    });
+  });
+
   it('exposes the underlying limiter and store', async () => {
     const instance = guard();
 
