@@ -1,6 +1,6 @@
 'use client';
 
-import { createElement, useEffect, useState } from 'react';
+import { createElement, useEffect, useState, type ReactElement } from 'react';
 import {
   MITA_TURNSTILE_TAG,
   type MitaTurnstileElement,
@@ -25,7 +25,7 @@ export interface MitaTurnstileProps {
  * to React — the element exposes no properties by those names, so both versions set them
  * as attributes.
  */
-export function MitaTurnstile(props: MitaTurnstileProps): React.JSX.Element {
+export function MitaTurnstile(props: MitaTurnstileProps): ReactElement {
   const { siteKey, theme, size, onVerified, onExpired, onError } = props;
   const [element, setElement] = useState<MitaTurnstileElement | null>(null);
 

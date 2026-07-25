@@ -5,6 +5,7 @@ import {
   resetMitaState,
   setTurnstileToken,
 } from '@mita-auth/client';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -14,7 +15,7 @@ import {
   useTurnstileToken,
 } from './hooks';
 
-function Probe(): React.JSX.Element {
+function Probe(): ReactElement {
   return (
     <ul>
       <li data-testid="isAuthenticated">{String(useIsAuthenticated())}</li>
@@ -107,7 +108,7 @@ describe('hooks', () => {
   it('leaves a component subscribed to another store alone', () => {
     const rendered = vi.fn();
 
-    function TurnstileOnly(): React.JSX.Element {
+    function TurnstileOnly(): ReactElement {
       rendered();
       return <span>{useTurnstileStatus()}</span>;
     }
