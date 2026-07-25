@@ -2,6 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    // The security guard has to run unchanged on Node, Vercel Edge and Cloudflare Workers.
+    // WebWorker models exactly that surface — fetch/Request/Response/URLSearchParams, no
+    // `document` — so a Node-only API cannot slip into the guard path unnoticed.
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
     "outDir": "dist",
     "rootDir": "src",
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
