@@ -53,7 +53,7 @@ importers:
 
   packages/client:
     dependencies:
-      '@mita/core':
+      '@mita-auth/core':
         specifier: workspace:*
         version: link:../core
       ky:
@@ -78,7 +78,7 @@ importers:
 
   packages/react:
     dependencies:
-      '@mita/client':
+      '@mita-auth/client':
         specifier: workspace:*
         version: link:../client
       '@nanostores/react':
@@ -97,7 +97,7 @@ importers:
 
   packages/server:
     dependencies:
-      '@mita/core':
+      '@mita-auth/core':
         specifier: workspace:*
         version: link:../core
       '@upstash/ratelimit':
@@ -113,7 +113,7 @@ importers:
 
   packages/vue:
     dependencies:
-      '@mita/client':
+      '@mita-auth/client':
         specifier: workspace:*
         version: link:../client
       '@nanostores/vue':
