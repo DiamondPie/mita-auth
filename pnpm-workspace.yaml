@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
-  msw: set this to true or false
+  # Its postinstall only copies the browser service worker; tests intercept in Node.
+  msw: false
 minimumReleaseAgeExclude:
   - tsdown@0.22.14
