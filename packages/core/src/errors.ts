@@ -20,6 +20,7 @@ export const DPOP_ERROR_CODES = [
   'dpop.private_key_material',
   'dpop.invalid_key',
   'dpop.invalid_signature',
+  'dpop.invalid_claims',
   'dpop.invalid_jti',
   'dpop.htm_mismatch',
   'dpop.htu_mismatch',
