@@ -1,7 +1,11 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { MITA_TURNSTILE_TAG, type MitaTurnstileElement, type TurnstileRenderOptions } from '@mita-auth/client';
+import { createElement, useEffect, useState } from 'react';
+import {
+  MITA_TURNSTILE_TAG,
+  type MitaTurnstileElement,
+  type TurnstileRenderOptions,
+} from '@mita-auth/client';
 
 export interface MitaTurnstileProps {
   siteKey: string;
@@ -13,63 +17,26 @@ export interface MitaTurnstileProps {
 }
 
 /**
- * React 18 has no notion of custom-element properties or events — it would write
- * `onVerified` as a DOM attribute and never call it. The element is therefore created and
- * wired up by hand instead of through JSX, which works identically on 18 and 19 and skips
- * needing a `JSX.IntrinsicElements['mita-turnstile']` augmentation altogether.
+ * Renders `<mita-turnstile>` and hands its events back as props.
+ *
+ * The element is reached through a callback ref rather than JSX event props because only
+ * React 19 maps `on*` on a custom element to `addEventListener`; React 18 would write
+ * `onVerified` as an attribute and never call it. The three attributes are safe to leave
+ * to React — the element exposes no properties by those names, so both versions set them
+ * as attributes.
  */
 export function MitaTurnstile(props: MitaTurnstileProps): React.JSX.Element {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const elementRef = useRef<MitaTurnstileElement | null>(null);
   const { siteKey, theme, size, onVerified, onExpired, onError } = props;
+  const [element, setElement] = useState<MitaTurnstileElement | null>(null);
 
   useEffect(() => {
-    const container = containerRef.current;
-
-    if (container === null) {
-      return;
-    }
-
-    const element = document.createElement(MITA_TURNSTILE_TAG) as MitaTurnstileElement;
-
-    elementRef.current = element;
-    container.append(element);
-    // Registering is what upgrades `element` from a plain HTMLElement — the custom
-    // elements spec upgrades already-connected instances the moment `define()` runs, so
-    // creating it ahead of the (possibly code-split) registration is safe.
+    // Registration is a side effect kept in its own entry, imported here so it stays out
+    // of a server bundle. The registry upgrades the element already in the document, so
+    // rendering ahead of this resolving is fine.
     void import('@mita-auth/client/turnstile');
-
-    return () => {
-      element.remove();
-      elementRef.current = null;
-    };
   }, []);
 
   useEffect(() => {
-    const element = elementRef.current;
-
-    if (element === null) {
-      return;
-    }
-
-    element.setAttribute('site-key', siteKey);
-
-    if (theme === undefined) {
-      element.removeAttribute('theme');
-    } else {
-      element.setAttribute('theme', theme);
-    }
-
-    if (size === undefined) {
-      element.removeAttribute('size');
-    } else {
-      element.setAttribute('size', size);
-    }
-  }, [siteKey, theme, size]);
-
-  useEffect(() => {
-    const element = elementRef.current;
-
     if (element === null) {
       return;
     }
@@ -93,7 +60,12 @@ export function MitaTurnstile(props: MitaTurnstileProps): React.JSX.Element {
       element.removeEventListener('expired', handleExpired);
       element.removeEventListener('error', handleError);
     };
-  }, [onVerified, onExpired, onError]);
+  }, [element, onVerified, onExpired, onError]);
 
-  return <div ref={containerRef} />;
+  return createElement(MITA_TURNSTILE_TAG, {
+    ref: setElement,
+    'site-key': siteKey,
+    theme,
+    size,
+  });
 }
