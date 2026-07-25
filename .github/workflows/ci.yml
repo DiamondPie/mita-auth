@@ -34,3 +34,25 @@ jobs:
       - run: pnpm check:exports
 
       - run: pnpm test
+
+  # The workspace installs React 19, but @mita-auth/react promises ^18 too. Without this
+  # the older half of that range would ship untested.
+  react-18:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @mita-auth/react add -D react@^18 react-dom@^18 @types/react@^18 @types/react-dom@^18
+
+      - run: pnpm turbo run typecheck --filter @mita-auth/react
+
+      - run: pnpm turbo run test --filter @mita-auth/react
