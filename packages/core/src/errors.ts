@@ -1,6 +1,6 @@
 /**
  * Every error Mita throws carries a stable, machine-readable `code` so that callers
- * (notably `@mita/server`) can map failures onto HTTP responses without string matching.
+ * (notably `@mita-auth/server`) can map failures onto HTTP responses without string matching.
  */
 export class MitaError<TCode extends string = string> extends Error {
   readonly code: TCode;

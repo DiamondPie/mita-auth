@@ -5,7 +5,7 @@
  * package's fetch and same-origin emulation between the test and msw, which is neither
  * what ships to browsers nor what is under test here.
  */
-import { MITA_HEADERS, generateDPoPKeyPair, verifyDPoP, type DPoPKeyPair } from '@mita/core';
+import { MITA_HEADERS, generateDPoPKeyPair, verifyDPoP, type DPoPKeyPair } from '@mita-auth/core';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';

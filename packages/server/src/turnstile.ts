@@ -1,4 +1,4 @@
-import { turnstileTokenSchema } from '@mita/core';
+import { turnstileTokenSchema } from '@mita-auth/core';
 
 export const TURNSTILE_SITEVERIFY_ENDPOINT =
   'https://challenges.cloudflare.com/turnstile/v0/siteverify';

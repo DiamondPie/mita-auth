@@ -1,5 +1,5 @@
 {
-  "name": "@mita/core",
+  "name": "@mita-auth/core",
   "version": "0.0.0",
   "description": "Framework-agnostic core: DPoP signing, nonce generation, shared Zod schemas.",
   "license": "MIT",

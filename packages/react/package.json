@@ -1,7 +1,7 @@
 {
-  "name": "@mita/react",
+  "name": "@mita-auth/react",
   "version": "0.0.0",
-  "description": "Thin React 18+ bindings (useStore) over @mita/client's nanostores state.",
+  "description": "Thin React 18+ bindings (useStore) over @mita-auth/client's nanostores state.",
   "license": "MIT",
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
@@ -34,7 +34,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@mita/client": "workspace:*",
+    "@mita-auth/client": "workspace:*",
     "@nanostores/react": "^1.1.0"
   },
   "peerDependencies": {

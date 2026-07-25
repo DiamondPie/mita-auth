@@ -1,4 +1,4 @@
-import { generateNonce } from '@mita/core';
+import { generateNonce } from '@mita-auth/core';
 import { Redis } from '@upstash/redis';
 import { HttpResponse, delay, http } from 'msw';
 import { setupServer } from 'msw/node';

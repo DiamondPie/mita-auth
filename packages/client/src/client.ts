@@ -6,7 +6,7 @@ import {
   signDPoP,
   type DPoPAlgorithm,
   type DPoPKeyPair,
-} from '@mita/core';
+} from '@mita-auth/core';
 import ky, { type KyInstance, type Options } from 'ky';
 
 import { consumeTurnstileToken, markSessionActive, markSessionUnauthorized } from './state';

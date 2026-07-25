@@ -1,8 +1,8 @@
 /**
  * Sanitization rules as pure data.
  *
- * `@mita/core` never imports DOMPurify — the rules live here so that client and server
- * agree on one allowlist, while the actual DOM traversal stays in `@mita/server`, which
+ * `@mita-auth/core` never imports DOMPurify — the rules live here so that client and server
+ * agree on one allowlist, while the actual DOM traversal stays in `@mita-auth/server`, which
  * spreads a profile straight into `DOMPurify.sanitize(html, { ...profile })`.
  */
 export interface SanitizeProfile {
@@ -23,7 +23,7 @@ export interface SanitizeProfile {
 export const SAFE_URI_PATTERN = /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i;
 
 /**
- * `rel` value `@mita/server` forces onto every surviving anchor: `noopener`/`noreferrer`
+ * `rel` value `@mita-auth/server` forces onto every surviving anchor: `noopener`/`noreferrer`
  * close the `window.opener` hijack, `nofollow`/`ugc` mark user-submitted links for crawlers.
  */
 export const SAFE_LINK_REL = 'noopener noreferrer nofollow ugc';

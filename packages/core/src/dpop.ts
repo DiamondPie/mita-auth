@@ -164,7 +164,7 @@ export interface SignDPoPOptions {
  * Signs a DPoP proof JWT binding the key pair to one specific request.
  *
  * The `jti` is single-use: the verifier is expected to reject a second proof carrying the
- * same value. That replay store is deliberately not part of `@mita/core` — see
+ * same value. That replay store is deliberately not part of `@mita-auth/core` — see
  * {@link verifyDPoP}.
  */
 export async function signDPoP(keyPair: DPoPKeyPair, options: SignDPoPOptions): Promise<string> {
@@ -230,8 +230,8 @@ export interface DPoPProof {
 /**
  * Verifies a DPoP proof against the request it claims to be bound to.
  *
- * Replay detection is out of scope by design: `@mita/core` is a zero-I/O package, so the
- * returned {@link DPoPProof.jti} has to be recorded by the caller — `@mita/server` writes
+ * Replay detection is out of scope by design: `@mita-auth/core` is a zero-I/O package, so the
+ * returned {@link DPoPProof.jti} has to be recorded by the caller — `@mita-auth/server` writes
  * it to Upstash Redis with `SET NX` for the proof's acceptance window. Verifying the same
  * proof twice therefore succeeds here; that is expected, not a gap.
  *

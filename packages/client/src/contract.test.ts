@@ -1,12 +1,12 @@
 /**
  * @vitest-environment node
  *
- * Runs the real `@mita/server` guard behind msw so both halves of the wire protocol are
+ * Runs the real `@mita-auth/server` guard behind msw so both halves of the wire protocol are
  * exercised against each other. Every other test in this package asserts one side against
  * a hand-written stand-in, which cannot catch the two drifting apart.
  */
-import { MITA_HEADERS } from '@mita/core';
-import { createSecurityGuard, TURNSTILE_SITEVERIFY_ENDPOINT } from '@mita/server';
+import { MITA_HEADERS } from '@mita-auth/core';
+import { createSecurityGuard, TURNSTILE_SITEVERIFY_ENDPOINT } from '@mita-auth/server';
 import { isHTTPError } from 'ky';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';

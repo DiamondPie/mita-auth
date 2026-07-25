@@ -6,7 +6,7 @@ import {
   verifyDPoP,
   type DPoPAlgorithm,
   type DPoPProof,
-} from '@mita/core';
+} from '@mita-auth/core';
 import { Redis } from '@upstash/redis';
 import type { Duration, RatelimitConfig } from '@upstash/ratelimit';
 

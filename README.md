@@ -3,7 +3,7 @@
 **A batteries-included, framework-agnostic authentication & anti-abuse protection SDK.**
 Write the core logic once, and it works across Next.js / Nuxt / React / Vue / vanilla JS — built to be reused across your personal site and every project after it.
 
-> Status: 🚧 In development — `@mita/core` and `@mita/server` are complete, `@mita/client` is in progress. Nothing is published to npm yet.
+> Status: 🚧 In development — `@mita-auth/core` and `@mita-auth/server` are complete, `@mita-auth/client` is in progress. Nothing is published to npm yet.
 
 *[中文版 / Chinese version](./README_zh.md)*
 

@@ -1,5 +1,5 @@
 {
-  "name": "@mita/server",
+  "name": "@mita-auth/server",
   "version": "0.0.0",
   "description": "Node.js / Edge runtime server helpers: rate limiting, Turnstile verification, replay protection.",
   "license": "MIT",
@@ -35,7 +35,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@mita/core": "workspace:*",
+    "@mita-auth/core": "workspace:*",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0"
   },

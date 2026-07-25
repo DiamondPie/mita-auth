@@ -23,7 +23,7 @@ export interface CreateNonceOptions extends GenerateNonceOptions {
  * An opaque nonce plus its TTL metadata.
  *
  * The value carries no embedded timestamp and is not signed — expiry and single-use
- * semantics both live in the server-side store (`@mita/server` writes it to Upstash Redis
+ * semantics both live in the server-side store (`@mita-auth/server` writes it to Upstash Redis
  * with `SET NX PX`). Keeping the value opaque means a client can never influence its own
  * validity window.
  */

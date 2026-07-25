@@ -1,4 +1,4 @@
-import { MitaError, createNonce, nonceSchema, type Nonce } from '@mita/core';
+import { MitaError, createNonce, nonceSchema, type Nonce } from '@mita-auth/core';
 import type { Redis } from '@upstash/redis';
 
 export const DEFAULT_REPLAY_STORE_PREFIX = 'mita';
@@ -8,7 +8,7 @@ export const DEFAULT_NONCE_TTL_MS = 300_000;
 
 /**
  * How long a spent `jti` is remembered. Must cover the verifier's acceptance window
- * (`@mita/core` defaults to 60 s max age plus 5 s clock tolerance), or a proof becomes
+ * (`@mita-auth/core` defaults to 60 s max age plus 5 s clock tolerance), or a proof becomes
  * replayable again while it is still considered fresh.
  */
 export const DEFAULT_PROOF_TTL_MS = 70_000;
@@ -67,7 +67,7 @@ export interface ReplayStore {
 /**
  * Redis-backed single-use storage for nonces and DPoP proof identifiers.
  *
- * `@mita/core` verifies a proof's signature and claims but deliberately performs no
+ * `@mita-auth/core` verifies a proof's signature and claims but deliberately performs no
  * replay detection, because it does no I/O. This is the missing half: without it, the
  * same valid proof can be presented indefinitely.
  *
