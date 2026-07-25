@@ -25,7 +25,7 @@ describe('<MitaTurnstile> registration', () => {
   it('imports the entry that registers the element', async () => {
     expect(customElements.get(MITA_TURNSTILE_TAG)).toBeUndefined();
 
-    open = mount(MitaTurnstile, { props: { siteKey: 'site' }, attachTo: document.body });
+    open = mount(MitaTurnstile, { props: { siteKey: 'site' } });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(imported).toHaveBeenCalledTimes(1);

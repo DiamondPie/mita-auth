@@ -55,8 +55,12 @@ async function flush(): Promise<void> {
 }
 
 async function mounted(props: Props = {}): Promise<VueWrapper> {
-  // The element only upgrades and connects inside a document.
-  open = mount(MitaTurnstile, { props: { siteKey: 'site', ...props }, attachTo: document.body });
+  open = mount(MitaTurnstile, { props: { siteKey: 'site', ...props } });
+
+  // The element upgrades and connects only inside a document, and Vue takes it back out on
+  // unmount wherever it sits. Moving it by hand rather than through the `attachTo` option,
+  // which reaches for `app.onUnmount` — a Vue 3.5 API, above this package's peer floor.
+  document.body.append(open.element);
 
   await flush();
 
