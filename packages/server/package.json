@@ -1,7 +1,7 @@
 {
   "name": "@mita/server",
   "version": "0.0.0",
-  "description": "Node.js / Edge runtime server helpers: rate limiting, Turnstile verification, HTML sanitization.",
+  "description": "Node.js / Edge runtime server helpers: rate limiting, Turnstile verification, replay protection.",
   "license": "MIT",
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
@@ -36,7 +36,9 @@
   "dependencies": {
     "@mita/core": "workspace:*",
     "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.38.0",
-    "isomorphic-dompurify": "^3.19.0"
+    "@upstash/redis": "^1.38.0"
+  },
+  "devDependencies": {
+    "msw": "^2.15.0"
   }
 }

@@ -1,5 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+allowBuilds:
+  msw: set this to true or false
 minimumReleaseAgeExclude:
   - tsdown@0.22.14
