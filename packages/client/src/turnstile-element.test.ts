@@ -234,14 +234,28 @@ describe('<mita-turnstile>', () => {
     expect(api.render).toHaveBeenCalledTimes(1);
   });
 
-  // happy-dom refuses to fetch external scripts, which stands in here for a script the
-  // network never delivers.
-  it('reports a script it cannot load', async () => {
+  // happy-dom never fetches the script, so it loads without leaving an API behind — the
+  // same place a truncated or blocked response would land.
+  it('reports a script that publishes no API', async () => {
     delete window.turnstile;
 
     await mount();
 
     expect(document.head.querySelector('script')?.src).toBe(TURNSTILE_SCRIPT_URL);
+    expect($turnstileStatus.get()).toBe('error');
+    expect(lastEvent().detail).toEqual({ code: 'script_unavailable' });
+  });
+
+  it('reports a script the browser refuses to fetch', async () => {
+    delete window.turnstile;
+    const script = document.createElement('script');
+    script.src = TURNSTILE_SCRIPT_URL;
+    document.head.append(script);
+
+    await mount();
+    script.dispatchEvent(new Event('error'));
+    await flush();
+
     expect($turnstileStatus.get()).toBe('error');
     expect(lastEvent().detail).toEqual({ code: 'script_unavailable' });
   });
