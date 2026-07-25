@@ -78,6 +78,27 @@ function redisHandler(
   });
 }
 
+/** Serves the defaults until the nth Redis round trip, which then errors. */
+function redisFailingAt(failingCall: number) {
+  let calls = 0;
+
+  return http.post(PIPELINE_ENDPOINT, async ({ request }) => {
+    const commands = JSON.parse(await request.text()) as Command[];
+    sent.push(...commands);
+    calls += 1;
+
+    if (calls === failingCall) {
+      return HttpResponse.json({ error: 'boom' }, { status: 500 });
+    }
+
+    return HttpResponse.json(
+      commands.map((command) => ({
+        result: command[0] === 'evalsha' ? [9, 10] : command[0] === 'getdel' ? 1 : 'OK',
+      })),
+    );
+  });
+}
+
 function siteverifyHandler(success: boolean, init?: ResponseInit) {
   return http.post(TURNSTILE_SITEVERIFY_ENDPOINT, () => {
     siteverifyCalls();
@@ -337,6 +358,34 @@ describe('dpop', () => {
     expect(check.success || check.response.status).toBe(503);
   });
 
+  // A misconfiguration is not a failed proof; disguising it as a 401 would send the
+  // client into an unwinnable retry loop over a bug only the operator can fix.
+  it('rethrows an error that is not a proof rejection', async () => {
+    const guarded = guard({ dpop: true, resolveUrl: () => 'not-an-absolute-url' });
+
+    await expect(guarded.verify(await dpopRequest())).rejects.toThrow();
+  });
+
+  it('answers 503 when no nonce can be minted for the challenge', async () => {
+    // Commands run one per request: 1 is the rate-limit script, 2 issues the nonce.
+    server.use(redisFailingAt(2));
+
+    const check = await guard({ dpop: true }).verify(plainRequest());
+
+    expect(check).toMatchObject({ success: false, reason: 'store_unavailable' });
+    expect(check.success || check.response.status).toBe(503);
+  });
+
+  // The proof itself was fine, but without a follow-up nonce the client cannot continue.
+  it('answers 503 when the next nonce cannot be issued after a valid proof', async () => {
+    // 1 rate limit, 2 redeem nonce, 3 claim jti, 4 issue the next nonce.
+    server.use(redisFailingAt(4));
+
+    const check = await guard({ dpop: true }).verify(await dpopRequest());
+
+    expect(check).toMatchObject({ success: false, reason: 'store_unavailable' });
+  });
+
   it('binds the proof to the public URL when a proxy rewrote it', async () => {
     const proof = await signDPoP(keyPair, {
       method: 'POST',
@@ -385,6 +434,46 @@ describe('composition', () => {
     expect(check.success).toBe(true);
     expect(siteverifyCalls).toHaveBeenCalledOnce();
     expect(commandNames()).toEqual(['evalsha', 'getdel', 'set', 'set']);
+  });
+
+  it('forwards the DPoP store settings', async () => {
+    const onUnavailable = vi.fn();
+
+    await guard({
+      dpop: { prefix: 'acme', nonceTtlMs: 45_000, timeoutMs: 2000, onUnavailable },
+    }).verify(await dpopRequest());
+
+    const issue = sent.find((command) => command[0] === 'set' && !command.includes('nx'));
+
+    expect(issue?.[1]).toMatch(/^acme:nonce:/);
+    expect(issue).toContain(45_000);
+    expect(onUnavailable).not.toHaveBeenCalled();
+  });
+
+  it('forwards the Turnstile settings', async () => {
+    const endpoint = 'https://siteverify.proxy.test/verify';
+    server.use(
+      http.post(endpoint, () =>
+        HttpResponse.json({
+          success: true,
+          challenge_ts: new Date().toISOString(),
+          hostname: 'elsewhere.test',
+          action: 'comment',
+        }),
+      ),
+    );
+
+    const check = await guard({
+      turnstile: {
+        secretKey: 'secret',
+        endpoint,
+        allowedHostnames: ['example.com'],
+        expectedAction: 'comment',
+        maxAgeSeconds: 120,
+      },
+    }).verify(plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }));
+
+    expect(check).toMatchObject({ success: false, reason: 'turnstile_rejected' });
   });
 
   it('exposes the underlying limiter and store', async () => {

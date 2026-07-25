@@ -141,6 +141,24 @@ describe('createRateLimiter', () => {
     expect(decision.identifier).toBe(UNIDENTIFIED_RATE_LIMIT_KEY);
   });
 
+  it('passes the optional Upstash settings through', async () => {
+    const sent: string[] = [];
+    server.use(
+      http.post(PIPELINE_ENDPOINT, async ({ request }) => {
+        sent.push(await request.text());
+        return HttpResponse.json([{ result: [9, 10] }]);
+      }),
+    );
+
+    await limiter({
+      prefix: 'acme',
+      analytics: false,
+      ephemeralCache: new Map(),
+    }).limit(request({ 'cf-connecting-ip': '198.51.100.1' }));
+
+    expect(sent[0]).toContain('acme:198.51.100.1');
+  });
+
   describe('degradation', () => {
     it('fails open by default when Redis errors', async () => {
       server.use(
