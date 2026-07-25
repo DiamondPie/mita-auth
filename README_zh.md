@@ -3,7 +3,7 @@
 **一套开箱即用、框架无关（Framework-agnostic）的鉴权与反爬（Anti-abuse）防护 SDK。**
 一次编写核心逻辑，同时适配 Next.js / Nuxt / React / Vue / 原生 JS，供个人主页与后续所有项目复用。
 
-> 状态：🚧 规划阶段（Design Phase）— 尚未开始编码。
+> 状态：🚧 开发中 — `@mita/core` 与 `@mita/server` 已完成，`@mita/client` 进行中；尚未发布到 npm。
 
 *[English version](./README.md)*
 
