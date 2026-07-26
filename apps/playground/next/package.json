@@ -1,0 +1,31 @@
+{
+  "name": "@mita-playground/next",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Next.js App Router comment demo wired to @mita-auth/react and @mita-auth/server.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf .next"
+  },
+  "dependencies": {
+    "@mita-auth/client": "workspace:*",
+    "@mita-auth/core": "workspace:*",
+    "@mita-auth/react": "workspace:*",
+    "@mita-auth/server": "workspace:*",
+    "@mita-playground/fake-upstash": "workspace:*",
+    "ky": "^2.0.2",
+    "next": "^16.2.12",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3"
+  }
+}
