@@ -89,6 +89,14 @@ review, one string to grep for before a deploy.
 - **`escapeHtml` turns markup into text; it does not filter.** Escape either on write or on
   render, never both — its output belongs in `v-html` / `dangerouslySetInnerHTML`, not in
   ordinary text interpolation, which would escape it a second time.
+- **A 503 says `turnstile_unavailable` and nothing else.** Pass `turnstile.onUnavailable` to
+  learn which one it was: a Cloudflare outage, a runtime without `AbortSignal.timeout`, and a
+  response that was not JSON all look identical from the outside, and with the default
+  fail-closed policy any of them takes every write down.
+- **`turnstile.remoteIp` is off by default.** Cloudflare sharpens its verdict with the
+  visitor's IP, but the headers it comes from are client-supplied unless a trusted proxy
+  overwrites them. Behind Cloudflare or Vercel, turn it on; on a bare Node server it would
+  forward a value the visitor chose.
 - Web-standard APIs only, compiled against the WebWorker lib with `types: []`. Runs on Node,
   Vercel Edge and Cloudflare Workers.
 

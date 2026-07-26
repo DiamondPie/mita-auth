@@ -26,6 +26,7 @@ const server = setupServer();
 let keyPair: DPoPKeyPair;
 let sent: Command[];
 let siteverifyCalls: Mock<() => void>;
+let siteverifyBody: URLSearchParams | undefined;
 
 beforeAll(async () => {
   server.listen({ onUnhandledRequest: 'error' });
@@ -35,6 +36,7 @@ beforeAll(async () => {
 beforeEach(() => {
   sent = [];
   siteverifyCalls = vi.fn<() => void>();
+  siteverifyBody = undefined;
   server.use(redisHandler(), siteverifyHandler(true));
 });
 
@@ -107,8 +109,10 @@ function redisFailingAt(failingCall: number) {
 }
 
 function siteverifyHandler(success: boolean, init?: ResponseInit) {
-  return http.post(TURNSTILE_SITEVERIFY_ENDPOINT, () => {
+  return http.post(TURNSTILE_SITEVERIFY_ENDPOINT, async ({ request }) => {
     siteverifyCalls();
+    siteverifyBody = new URLSearchParams(await request.text());
+
     return HttpResponse.json(
       { success, challenge_ts: new Date().toISOString(), hostname: 'example.com' },
       init,
@@ -206,6 +210,18 @@ describe('rate limiting', () => {
     expect(check.response.headers.get('retry-after')).not.toBeNull();
   });
 
+  // `retry-after` counts from now to the window's reset, and reading the wall clock made it
+  // the one header no test could pin down.
+  it('measures retry-after against the injected clock', async () => {
+    server.use(redisHandler({ evalsha: [-1, 10] }));
+
+    // A clock past the reset leaves nothing to wait for. On the wall clock this header
+    // would be most of a minute.
+    const check = await guard({ now: () => Number.MAX_SAFE_INTEGER }).verify(plainRequest());
+
+    expect(check.success || check.response.headers.get('retry-after')).toBe('0');
+  });
+
   // Rate limiting is the cheapest check precisely so hostile traffic never reaches the
   // ones that cost a Cloudflare round trip or a signature verification.
   it('short-circuits before Turnstile and the replay store', async () => {
@@ -277,6 +293,53 @@ describe('turnstile', () => {
 
     expect(check).toMatchObject({ success: false, reason: 'turnstile_unavailable' });
     expect(check.success || check.response.status).toBe(503);
+  });
+
+  // Cloudflare sharpens its verdict with the visitor's IP, but the headers it comes from are
+  // client-supplied unless a proxy overwrites them — so this is a decision, not a default.
+  it('keeps the visitor IP to itself unless asked', async () => {
+    await guard({ turnstile: { secretKey: 'secret' } }).verify(
+      plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }),
+    );
+
+    expect(siteverifyBody?.has('remoteip')).toBe(false);
+  });
+
+  it('forwards the visitor IP when told to', async () => {
+    await guard({ turnstile: { secretKey: 'secret', remoteIp: true } }).verify(
+      plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }),
+    );
+
+    expect(siteverifyBody?.get('remoteip')).toBe('198.51.100.1');
+  });
+
+  it('takes a resolver of its own, and omits what it cannot resolve', async () => {
+    await guard({ turnstile: { secretKey: 'secret', remoteIp: () => '203.0.113.9' } }).verify(
+      plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }),
+    );
+
+    expect(siteverifyBody?.get('remoteip')).toBe('203.0.113.9');
+
+    await guard({ turnstile: { secretKey: 'secret', remoteIp: () => null } }).verify(
+      plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }),
+    );
+
+    expect(siteverifyBody?.has('remoteip')).toBe(false);
+  });
+
+  // The 503 says `turnstile_unavailable` and nothing else. An outage, a runtime missing
+  // `AbortSignal.timeout` and a response that was not JSON all reach the caller identically.
+  it('hands the reason behind a 503 to onUnavailable', async () => {
+    server.use(siteverifyHandler(true, { status: 500 }));
+    const onUnavailable = vi.fn();
+
+    await guard({ turnstile: { secretKey: 'secret', onUnavailable } }).verify(
+      plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }),
+    );
+
+    expect(onUnavailable).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'unavailable', errorCodes: ['mita.http_error'] }),
+    );
   });
 
   it('can be configured to fail open instead', async () => {

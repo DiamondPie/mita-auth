@@ -13,12 +13,17 @@ import type { Duration, RatelimitConfig } from '@upstash/ratelimit';
 
 import {
   createRateLimiter,
+  resolveClientIp,
   type RateLimitDegradation,
   type RateLimitFailureMode,
   type RateLimiter,
 } from './ratelimit';
 import { createReplayStore, type ReplayStore } from './replay';
-import { verifyTurnstileToken, type TurnstileChallenge } from './turnstile';
+import {
+  verifyTurnstileToken,
+  type TurnstileChallenge,
+  type TurnstileUnavailable,
+} from './turnstile';
 
 /** Fail policy for a dependency the guard consults over the network. */
 export type GuardFailureMode = RateLimitFailureMode;
@@ -81,6 +86,17 @@ export interface GuardTurnstileOptions {
   secretKey: string;
   /** Reject requests that carry no token at all. Defaults to true. */
   required?: boolean;
+  /**
+   * Forward the visitor's IP to siteverify as `remoteip`, which Cloudflare uses to sharpen
+   * its verdict. `true` reads it with {@link resolveClientIp}; a function derives it some
+   * other way.
+   *
+   * Off by default, and deliberately: the headers `resolveClientIp` reads are client-supplied
+   * unless a trusted proxy overwrites them. Behind Cloudflare or Vercel that is guaranteed
+   * and this is worth turning on; on a bare Node server it would hand Cloudflare a value the
+   * visitor chose, and a wrong IP makes the scoring worse rather than better.
+   */
+  remoteIp?: boolean | ((request: Request) => string | null | undefined);
   allowedHostnames?: readonly string[];
   expectedAction?: string;
   maxAgeSeconds?: number;
@@ -92,6 +108,14 @@ export interface GuardTurnstileOptions {
    * degradation.
    */
   failureMode?: GuardFailureMode;
+  /**
+   * Called when siteverify reached no verdict, with the codes and cause behind it.
+   *
+   * Without this the only signal is a 503 whose body says `turnstile_unavailable`, and the
+   * reasons are worlds apart: a Cloudflare outage, a runtime with no `AbortSignal.timeout`,
+   * and a response that was not JSON all arrive looking identical.
+   */
+  onUnavailable?: (verification: TurnstileUnavailable) => void;
 }
 
 export interface GuardDPoPOptions {
@@ -214,7 +238,7 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
             )
           : failure(
               'rate_limited',
-              rateLimitedResponse(decision.limit, decision.reset),
+              rateLimitedResponse(decision.limit, decision.reset, now?.() ?? Date.now()),
               decision.pending,
             );
       }
@@ -242,7 +266,13 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
         return dpopOutcome.failure;
       }
 
-      const turnstileOutcome = await runTurnstile(token, turnstile, now?.(), decision.pending);
+      const turnstileOutcome = await runTurnstile(
+        request,
+        token,
+        turnstile,
+        now?.(),
+        decision.pending,
+      );
 
       if (turnstileOutcome.failure !== null) {
         return turnstileOutcome.failure;
@@ -417,6 +447,7 @@ async function runDPoP({
  * having been rejected before any of the expensive checks ran.
  */
 async function runTurnstile(
+  request: Request,
   token: string | null,
   options: GuardTurnstileOptions | undefined,
   now: number | undefined,
@@ -426,9 +457,12 @@ async function runTurnstile(
     return { failure: null };
   }
 
+  const remoteIp = resolveRemoteIp(request, options.remoteIp);
+
   const result = await verifyTurnstileToken({
     secretKey: options.secretKey,
     token,
+    ...(remoteIp === null ? {} : { remoteIp }),
     ...(options.allowedHostnames === undefined
       ? {}
       : { allowedHostnames: options.allowedHostnames }),
@@ -449,6 +483,10 @@ async function runTurnstile(
     };
   }
 
+  // Everything that made this unknowable is in `result`, and the 503 below carries none of
+  // it. Handing it over here is the only place a deployment can learn the difference.
+  options.onUnavailable?.(result);
+
   return (options.failureMode ?? 'closed') === 'open'
     ? { failure: null }
     : {
@@ -458,6 +496,20 @@ async function runTurnstile(
           pending,
         ),
       };
+}
+
+/** `null` when nothing usable was found, which leaves `remoteip` off the request entirely. */
+function resolveRemoteIp(
+  request: Request,
+  remoteIp: GuardTurnstileOptions['remoteIp'],
+): string | null {
+  if (remoteIp === undefined || remoteIp === false) {
+    return null;
+  }
+
+  const resolved = remoteIp === true ? resolveClientIp(request) : remoteIp(request);
+
+  return resolved === null || resolved === undefined || resolved === '' ? null : resolved;
 }
 
 /**
@@ -536,8 +588,8 @@ async function challengeFailure(
   return failure(reason, problemResponse(401, reason, headers), pending);
 }
 
-function rateLimitedResponse(limit: number, reset: number): Response {
-  const retryAfterSeconds = Math.max(0, Math.ceil((reset - Date.now()) / 1000));
+function rateLimitedResponse(limit: number, reset: number, now: number): Response {
+  const retryAfterSeconds = Math.max(0, Math.ceil((reset - now) / 1000));
 
   return problemResponse(
     429,

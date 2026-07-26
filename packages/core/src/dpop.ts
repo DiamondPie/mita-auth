@@ -320,9 +320,13 @@ export async function verifyDPoP(proof: string, options: VerifyDPoPOptions): Pro
   await verifyAth(ath, options.accessToken);
 
   const nonce = readStringClaim(payload, 'nonce');
-  const nonceMismatch = nonce === undefined || !timingSafeEqual(nonce, options.nonce ?? '');
 
-  if (options.nonce !== undefined && nonceMismatch) {
+  // A caller that passed no nonce is not checking for one, so the comparison — and the
+  // empty string it would otherwise have had to compare against — only exists inside here.
+  if (
+    options.nonce !== undefined &&
+    (nonce === undefined || !timingSafeEqual(nonce, options.nonce))
+  ) {
     throw new DPoPVerificationError(
       'dpop.nonce_mismatch',
       'DPoP proof does not echo the expected nonce.',
