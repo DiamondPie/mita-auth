@@ -1,6 +1,6 @@
 'use client';
 
-import { commentSchema } from '@mita-auth/core';
+import { commentSchema } from '@mita-auth/core/schemas';
 import { MitaTurnstile, useIsAuthenticated, useTurnstileStatus } from '@mita-auth/react';
 import { useEffect, useState, type FormEvent } from 'react';
 

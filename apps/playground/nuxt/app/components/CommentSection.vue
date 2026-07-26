@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { commentSchema } from '@mita-auth/core';
+import { commentSchema } from '@mita-auth/core/schemas';
 import { MitaTurnstile, useIsAuthenticated, useTurnstileStatus } from '@mita-auth/vue';
 import { onMounted, ref } from 'vue';
 

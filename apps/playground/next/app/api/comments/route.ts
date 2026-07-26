@@ -1,4 +1,4 @@
-import { commentSchema } from '@mita-auth/core';
+import { commentSchema } from '@mita-auth/core/schemas';
 import { after } from 'next/server';
 
 import { addComment, listComments } from '@/lib/comments';
