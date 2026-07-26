@@ -27,13 +27,33 @@ jobs:
 
       - run: pnpm lint
 
-      - run: pnpm typecheck
+      # Filtered to the published packages; the demos get their own job so that a Next or
+      # Nuxt release breaking them cannot be mistaken for the packages regressing.
+      - run: pnpm turbo run typecheck --filter="./packages/*"
 
-      - run: pnpm build
+      - run: pnpm turbo run build --filter="./packages/*"
 
       - run: pnpm check:exports
 
       - run: pnpm test
+
+  # The playground is the only place the packages meet a real bundler and a real HTTP
+  # server, which is where Phase 4 found defects no unit test could see.
+  playground:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm turbo run typecheck build --filter="@mita-playground/*"
 
   # The workspace installs React 19, but @mita-auth/react promises ^18 too. Without this
   # the older half of that range would ship untested.
