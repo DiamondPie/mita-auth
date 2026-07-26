@@ -3,6 +3,25 @@
   "version": "0.0.0",
   "description": "Framework-agnostic core: DPoP signing, nonce generation, shared Zod schemas.",
   "license": "MIT",
+  "keywords": [
+    "mita",
+    "dpop",
+    "rfc9449",
+    "proof-of-possession",
+    "nonce",
+    "zod",
+    "edge",
+    "anti-abuse"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DiamondPie/mita-auth.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/DiamondPie/mita-auth/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/DiamondPie/mita-auth/issues"
+  },
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
   "sideEffects": false,

@@ -3,6 +3,22 @@
   "version": "0.0.0",
   "description": "Thin Vue 3 bindings (useStore) over @mita-auth/client's nanostores state.",
   "license": "MIT",
+  "keywords": [
+    "mita",
+    "vue",
+    "composables",
+    "turnstile",
+    "dpop"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DiamondPie/mita-auth.git",
+    "directory": "packages/vue"
+  },
+  "homepage": "https://github.com/DiamondPie/mita-auth/tree/main/packages/vue#readme",
+  "bugs": {
+    "url": "https://github.com/DiamondPie/mita-auth/issues"
+  },
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
   "sideEffects": false,

@@ -3,6 +3,25 @@
   "version": "0.0.0",
   "description": "Node.js / Edge runtime server helpers: rate limiting, Turnstile verification, replay protection.",
   "license": "MIT",
+  "keywords": [
+    "mita",
+    "rate-limit",
+    "turnstile",
+    "replay-protection",
+    "dpop",
+    "upstash",
+    "xss",
+    "edge"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DiamondPie/mita-auth.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/DiamondPie/mita-auth/tree/main/packages/server#readme",
+  "bugs": {
+    "url": "https://github.com/DiamondPie/mita-auth/issues"
+  },
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
   "sideEffects": false,
