@@ -1,4 +1,4 @@
-import type { CommentInput } from '@mita-auth/core';
+import type { CommentInput } from '@mita-auth/core/schemas';
 import { escapeHtml } from '@mita-auth/server';
 
 import type { Comment } from './types';
