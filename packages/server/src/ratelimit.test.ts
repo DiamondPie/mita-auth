@@ -133,10 +133,18 @@ describe('createRateLimiter', () => {
     expect(decision.identifier).toBe('tenant-7');
   });
 
-  it('falls back to the shared bucket when the custom identifier yields nothing', async () => {
+  it.each([
+    ['null', () => null],
+    ['undefined', () => undefined],
+    // Left to `??` this became a key ending in a colon: a shared bucket by accident.
+    ['an empty string', () => ''],
+  ])('falls back to the shared bucket when the custom identifier yields %s', async (
+    _name,
+    identifier,
+  ) => {
     server.use(scriptResult(9));
 
-    const decision = await limiter({ identifier: () => null }).limit(request());
+    const decision = await limiter({ identifier }).limit(request());
 
     expect(decision.identifier).toBe(UNIDENTIFIED_RATE_LIMIT_KEY);
   });
