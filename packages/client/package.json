@@ -57,6 +57,7 @@
   "devDependencies": {
     "@mita-auth/server": "workspace:*",
     "happy-dom": "^20.11.1",
-    "msw": "^2.15.0"
+    "msw": "^2.15.0",
+    "rolldown": "^1.2.0"
   }
 }

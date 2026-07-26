@@ -72,6 +72,9 @@ importers:
       msw:
         specifier: ^2.15.0
         version: 2.15.0(@types/node@22.20.1)(typescript@6.0.3)
+      rolldown:
+        specifier: ^1.2.0
+        version: 1.2.0
 
   packages/core:
     dependencies:
