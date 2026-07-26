@@ -7,12 +7,12 @@
  */
 import { MITA_HEADERS } from '@mita-auth/core';
 import { createSecurityGuard, TURNSTILE_SITEVERIFY_ENDPOINT } from '@mita-auth/server';
-import { isHTTPError } from 'ky';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createProtectedClient } from './client';
+import { isHTTPError } from './ky';
 import { $isAuthenticated, resetMitaState, setTurnstileToken } from './state';
 
 const API_URL = 'https://api.test/comments';

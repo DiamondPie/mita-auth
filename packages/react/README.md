@@ -9,7 +9,7 @@ React bindings for [Mita](https://github.com/DiamondPie/mita-auth): four hooks o
 ## Install
 
 ```bash
-pnpm add @mita-auth/react @mita-auth/client ky
+pnpm add @mita-auth/react @mita-auth/client
 ```
 
 Peer: `react@^18 || ^19`.

@@ -20,7 +20,6 @@
     "@mita-auth/vue": "workspace:*",
     "@mita-playground/fake-upstash": "workspace:*",
     "h3": "^1.15.11",
-    "ky": "^2.0.2",
     "nuxt": "^4.5.0",
     "vue": "^3.5.40"
   },

@@ -6,12 +6,14 @@
  * what ships to browsers nor what is under test here.
  */
 import { MITA_HEADERS, generateDPoPKeyPair, verifyDPoP, type DPoPKeyPair } from '@mita-auth/core';
-import { isHTTPError } from 'ky';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createProtectedClient } from './client';
+// Reached through this package's own re-export, the way a consumer is meant to: ky is
+// not something an application should have to install to read a failure.
+import { isHTTPError } from './ky';
 import { $isAuthenticated, $turnstileStatus, resetMitaState, setTurnstileToken } from './state';
 
 const API_URL = 'https://api.test/comments';

@@ -13,17 +13,13 @@ Framework-agnostic on purpose — React and Vue bindings live in
 ## Install
 
 ```bash
-pnpm add @mita-auth/client ky
+pnpm add @mita-auth/client
 ```
-
-`ky` is a peer of your own code rather than an implementation detail: the client returns a
-`KyInstance`, and reading why a request failed goes through ky's `isHTTPError`.
 
 ## Usage
 
 ```ts
-import { createProtectedClient } from '@mita-auth/client';
-import { isHTTPError } from 'ky';
+import { createProtectedClient, isHTTPError } from '@mita-auth/client';
 
 const api = createProtectedClient({
   onUnauthorized: ({ reason }) => console.warn('not authorized:', reason),
@@ -59,6 +55,10 @@ pair — there is no login step.
 
 ## Notes
 
+- **Reading a failure needs no second package.** `createProtectedClient` returns a ky
+  instance and ky reports a refusal by throwing, so `isHTTPError`, `isNetworkError`,
+  `isTimeoutError` and `KyInstance` are re-exported from here. Anything past that is ky's
+  own API — import `ky` directly for it.
 - **The first request to a server is answered with a 401.** RFC 9449 defines that rejection
   as the nonce handshake; the client resolves it and retries on its own, which costs one
   extra round trip and one extra rate-limit token per cold start. Size your rate limits with
