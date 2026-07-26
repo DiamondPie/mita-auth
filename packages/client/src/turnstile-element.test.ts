@@ -160,6 +160,20 @@ describe('<mita-turnstile>', () => {
     expect($turnstileStatus.get()).toBe('pending');
   });
 
+  // Nothing on screen can clear a spent challenge once the widget is gone, and every later
+  // request would be sent without a token.
+  it('clears a spent challenge it has no widget left to reset', async () => {
+    const element = await mount();
+    options().callback?.('token-1');
+    element.remove();
+
+    expect(consumeTurnstileToken()).toBe('token-1');
+    element.reset();
+
+    expect(api.reset).not.toHaveBeenCalled();
+    expect($turnstileStatus.get()).toBe('idle');
+  });
+
   it('replaces the widget when the site key changes', async () => {
     const element = await mount();
 

@@ -107,6 +107,17 @@ export function markTurnstileError(): void {
 }
 
 /**
+ * Forgets the current challenge without touching the session.
+ *
+ * For the moment no widget is in a position to describe one: `spent` and `error` both say
+ * something about a widget that is no longer there, and a widget mounting later can only
+ * take over from `idle`.
+ */
+export function resetTurnstileChallenge(): void {
+  $writableTurnstile.set(IDLE_CHALLENGE);
+}
+
+/**
  * Returns every store to its initial value. Intended for sign-out paths and tests.
  *
  * The two writes are not coordinated because nothing derives from both atoms at once; the
