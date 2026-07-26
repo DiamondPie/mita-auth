@@ -37,11 +37,28 @@ async function probePrimitives(): Promise<Probe[]> {
     detail: typeof AbortSignal.timeout,
   });
 
-  // Existing is not aborting. `turnstile.ts` leans on it to bound siteverify at 5 seconds.
+  // Existing is not firing. Watching the event settles it without a network call: racing a
+  // deadline against a live request only measures how fast that request was.
+  const signal = AbortSignal.timeout(20);
+  const fired = await new Promise<boolean>((resolve) => {
+    signal.addEventListener('abort', () => resolve(true));
+    setTimeout(() => resolve(false), 500);
+  });
+  probes.push({
+    name: 'AbortSignal.timeout-fires',
+    ok: fired,
+    detail: `aborted=${signal.aborted} reason=${signal.reason?.name ?? 'none'}`,
+  });
+
+  // And firing is not aborting the fetch. A 1 ms deadline beats any real round trip, so
+  // this reports whether `fetch` honours the signal rather than who won a race.
   try {
-    const signal = AbortSignal.timeout(50);
-    await fetch('https://cloudflare.com/cdn-cgi/trace', { signal });
-    probes.push({ name: 'AbortSignal.timeout-aborts', ok: false, detail: 'request completed' });
+    await fetch('https://cloudflare.com/cdn-cgi/trace', { signal: AbortSignal.timeout(1) });
+    probes.push({
+      name: 'AbortSignal.timeout-aborts',
+      ok: false,
+      detail: 'request completed inside a 1ms deadline',
+    });
   } catch (cause) {
     const aborted = cause instanceof Error && /abort|timeout/i.test(cause.name + cause.message);
     probes.push({ name: 'AbortSignal.timeout-aborts', ok: aborted, detail: String(cause) });
@@ -90,6 +107,18 @@ export default {
 
     if (url.pathname === '/primitives') {
       return Response.json({ probes: await probePrimitives() });
+    }
+
+    // A DPoP proof binds to the URL the client signed and to the moment it signed at, so a
+    // `dpop_invalid` has exactly two candidate causes on a tunnelled runtime: the platform
+    // handed the guard a different URL than the client saw, or the two clocks disagree.
+    // This says which, instead of leaving it to be guessed.
+    if (url.pathname === '/echo') {
+      return Response.json({
+        url: request.url,
+        now: Date.now(),
+        headers: Object.fromEntries(request.headers),
+      });
     }
 
     // A real guard against real Upstash. The `/cloudflare` client is deliberate: the guard
