@@ -15,12 +15,15 @@ const MESSAGES: Record<string, string> = {
   invalid_comment: 'The server rejected the comment as invalid.',
 };
 
-export async function describeFailure(cause: unknown): Promise<string> {
+export function describeFailure(cause: unknown): string {
   if (!isHTTPError(cause)) {
     return 'The request never reached the server.';
   }
 
-  const body: unknown = await cause.response.json().catch(() => null);
+  // `error.data`, not `error.response.json()`: ky pre-parses the body into `data` and that
+  // consumes the response, so reading the response instead quietly falls through to the
+  // generic message for every rejection the guard took the trouble to name.
+  const body: unknown = cause.data;
   const reason =
     typeof body === 'object' && body !== null && 'error' in body ? String(body.error) : null;
   const known = reason === null ? undefined : MESSAGES[reason];

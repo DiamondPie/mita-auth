@@ -53,7 +53,7 @@ const submit = async () => {
     comments.value = [comment, ...comments.value];
     content.value = '';
   } catch (cause) {
-    error.value = await describeFailure(cause);
+    error.value = describeFailure(cause);
   } finally {
     pending.value = false;
   }

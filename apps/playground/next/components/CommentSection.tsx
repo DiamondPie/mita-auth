@@ -57,7 +57,7 @@ export function CommentSection() {
       setComments((current) => [comment, ...current]);
       setContent('');
     } catch (cause) {
-      setError(await describeFailure(cause));
+      setError(describeFailure(cause));
     } finally {
       setPending(false);
     }
