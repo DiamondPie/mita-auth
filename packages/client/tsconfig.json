@@ -4,7 +4,10 @@
     "composite": true,
     "outDir": "dist",
     "rootDir": "src",
-    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    // Kept out of `dist`, which `files: ["dist"]` publishes and tsdown wipes on every
+    // build: an incremental cache does not belong in a tarball, and whether it landed in
+    // one came down to whether `tsc` or `tsdown` ran last.
+    "tsBuildInfoFile": "./.tsbuildinfo",
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src"],
