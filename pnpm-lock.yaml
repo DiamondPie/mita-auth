@@ -118,6 +118,9 @@ importers:
       '@mita-playground/fake-upstash':
         specifier: workspace:*
         version: link:../fake-upstash
+      h3:
+        specifier: ^1.15.11
+        version: 1.15.11
       ky:
         specifier: ^2.0.2
         version: 2.0.2

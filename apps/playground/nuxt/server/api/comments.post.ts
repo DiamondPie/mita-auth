@@ -1,12 +1,17 @@
 import { commentSchema } from '@mita-auth/core';
+import { toWebRequest } from 'h3';
 
 import { addComment } from '~~/lib/comments';
 import { guard } from '~~/lib/guard';
 
 export default defineEventHandler(async (event) => {
-  // The one line of glue this side needs. Read the body off this `Request` rather than
-  // through `readBody(event)`: the conversion hands the Node stream to the `Request`, and
-  // h3's own reader then waits forever on a stream it no longer owns.
+  // The one line of glue this side needs: Nitro 2 runs on h3 v1, whose event wraps a Node
+  // request rather than a web one. Imported explicitly rather than auto-imported, because
+  // an h3 v2 release candidate is installed alongside and Nuxt's generated auto-imports
+  // resolve to it — and that build dropped `toWebRequest` entirely.
+  //
+  // Read the body off this `Request` too: the conversion hands it the Node stream, and
+  // `readBody(event)` would then wait forever on a stream it no longer owns.
   const request = toWebRequest(event);
 
   const check = await guard.verify(request);
