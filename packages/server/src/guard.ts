@@ -1,6 +1,7 @@
 import {
   DPOP_AUTH_SCHEME,
   MITA_HEADERS,
+  MitaError,
   SUPPORTED_DPOP_ALGORITHMS,
   isDPoPVerificationError,
   verifyDPoP,
@@ -113,8 +114,18 @@ export interface CreateSecurityGuardOptions {
    *
    * Any of the platform entry points will do — the `Redis` classes exported by
    * `@upstash/redis`, `/cloudflare` and `/fastly` are structurally identical.
+   *
+   * Optional only because {@link rateLimiter} and {@link replayStore} can be supplied
+   * ready-made; whichever of the two is left to be built needs this.
    */
-  redis: Redis | { url: string; token: string };
+  redis?: Redis | { url: string; token: string };
+  /**
+   * A limiter to use instead of building a Redis-backed one, which makes {@link rateLimit}
+   * moot. `@mita-auth/server/memory` has one for local development.
+   */
+  rateLimiter?: RateLimiter;
+  /** A replay store to use instead of building a Redis-backed one. Same as above. */
+  replayStore?: ReplayStore;
   rateLimit?: GuardRateLimitOptions;
   /** Enables Turnstile verification. Omit to skip it. */
   turnstile?: GuardTurnstileOptions;
@@ -154,26 +165,36 @@ export interface SecurityGuard {
 export function createSecurityGuard(options: CreateSecurityGuardOptions): SecurityGuard {
   const { rateLimit = {}, turnstile, dpop, resolveUrl = (request) => request.url, now } = options;
 
-  // Told apart by shape rather than by `instanceof`. `@upstash/redis` publishes a separate
-  // subclass per platform entry point — `/cloudflare` and `/fastly` alongside the default
-  // Node one — and they share a base class but not an identity. An identity check would
-  // reject precisely the entry points those runtimes are meant to use, and would then
-  // quietly build a second client with no URL at all.
-  const redis = 'url' in options.redis ? new Redis(options.redis) : options.redis;
+  const client = resolveRedis(options.redis);
+
+  /** Refused here rather than at the first request, where it would read as an outage. */
+  const requireRedis = (missing: string): Redis => {
+    if (client === undefined) {
+      throw new MitaError(
+        'guard.redis_required',
+        `A guard needs \`redis\` unless a ${missing} is supplied ready-made. \`@mita-auth/server/memory\` has in-process stores for local development.`,
+      );
+    }
+
+    return client;
+  };
 
   const dpopOptions: GuardDPoPOptions | undefined = dpop === true ? {} : dpop;
 
-  const rateLimiter = createRateLimiter({ redis, ...rateLimit });
-  const replayStore = createReplayStore({
-    redis,
-    ...(dpopOptions?.prefix === undefined ? {} : { prefix: dpopOptions.prefix }),
-    ...(dpopOptions?.nonceTtlMs === undefined ? {} : { nonceTtlMs: dpopOptions.nonceTtlMs }),
-    ...(dpopOptions?.timeoutMs === undefined ? {} : { timeoutMs: dpopOptions.timeoutMs }),
-    ...(dpopOptions?.onUnavailable === undefined
-      ? {}
-      : { onUnavailable: dpopOptions.onUnavailable }),
-    proofTtlMs: proofLifetimeMs(dpopOptions),
-  });
+  const rateLimiter =
+    options.rateLimiter ?? createRateLimiter({ redis: requireRedis('rateLimiter'), ...rateLimit });
+  const replayStore =
+    options.replayStore ??
+    createReplayStore({
+      redis: requireRedis('replayStore'),
+      ...(dpopOptions?.prefix === undefined ? {} : { prefix: dpopOptions.prefix }),
+      ...(dpopOptions?.nonceTtlMs === undefined ? {} : { nonceTtlMs: dpopOptions.nonceTtlMs }),
+      ...(dpopOptions?.timeoutMs === undefined ? {} : { timeoutMs: dpopOptions.timeoutMs }),
+      ...(dpopOptions?.onUnavailable === undefined
+        ? {}
+        : { onUnavailable: dpopOptions.onUnavailable }),
+      proofTtlMs: proofLifetimeMs(dpopOptions),
+    });
 
   const algorithms = dpopOptions?.algorithms ?? SUPPORTED_DPOP_ALGORITHMS;
 
@@ -437,6 +458,23 @@ async function runTurnstile(
           pending,
         ),
       };
+}
+
+/**
+ * Builds the Upstash client, or takes the one it was handed.
+ *
+ * Told apart by shape rather than by `instanceof`: `@upstash/redis` publishes a separate
+ * subclass per platform entry point — `/cloudflare` and `/fastly` alongside the default Node
+ * one — and they share a base class but not an identity. An identity check would reject
+ * precisely the entry points those runtimes are meant to use, and would then quietly build a
+ * second client with no URL at all.
+ */
+function resolveRedis(redis: CreateSecurityGuardOptions['redis']): Redis | undefined {
+  if (redis === undefined) {
+    return undefined;
+  }
+
+  return 'url' in redis ? new Redis(redis) : redis;
 }
 
 /** Keeps a spent `jti` on record for at least as long as a proof stays acceptable. */

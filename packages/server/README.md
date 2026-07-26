@@ -12,8 +12,9 @@ call that takes a `Request` and hands back either a pass or the `Response` to re
 pnpm add @mita-auth/server
 ```
 
-Requires an [Upstash Redis](https://upstash.com) database: the nonce and spent-proof stores
-need somewhere durable to live, and there is no in-memory fallback yet.
+A production deployment needs an [Upstash Redis](https://upstash.com) database — the nonce
+and spent-proof stores have to be durable and shared. For local development there is
+`@mita-auth/server/memory`, which needs nothing at all.
 
 ## Usage
 
@@ -43,6 +44,28 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
+## Running without Redis
+
+```ts
+import { createSecurityGuard } from '@mita-auth/server';
+import { createMemoryRateLimiter, createMemoryReplayStore } from '@mita-auth/server/memory';
+
+const guard = createSecurityGuard({
+  rateLimiter: createMemoryRateLimiter({ requests: 10, window: '1 m' }),
+  replayStore: createMemoryReplayStore(),
+  dpop: true,
+});
+```
+
+Everything else behaves the same — same sliding window, same single-use nonces, same
+`verify()`.
+
+**Never ship this.** Both stores live in one instance's memory: a second instance shares
+nothing with the first, so the rate limit divides by however many are running, and a spent
+nonce becomes redeemable again as soon as the instance that spent it goes away — which on
+Edge is most requests. That is why it is a separate entry point: one import line to find in
+review, one string to grep for before a deploy.
+
 ## What it contains
 
 | Area | Exports |
@@ -52,6 +75,7 @@ export async function POST(request: Request): Promise<Response> {
 | Replay protection | `createReplayStore` |
 | Turnstile | `verifyTurnstileToken` |
 | Escaping | `escapeHtml` |
+| Development stores (`/memory`) | `createMemoryRateLimiter`, `createMemoryReplayStore` |
 
 ## Notes
 

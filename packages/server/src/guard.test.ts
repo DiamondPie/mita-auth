@@ -1,10 +1,17 @@
-import { generateDPoPKeyPair, generateNonce, signDPoP, type DPoPKeyPair } from '@mita-auth/core';
+import {
+  MITA_HEADERS,
+  generateDPoPKeyPair,
+  generateNonce,
+  signDPoP,
+  type DPoPKeyPair,
+} from '@mita-auth/core';
 import { Redis } from '@upstash/redis';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { createSecurityGuard, type CreateSecurityGuardOptions } from './guard';
+import { createMemoryRateLimiter, createMemoryReplayStore } from './memory';
 import { TURNSTILE_SITEVERIFY_ENDPOINT } from './turnstile';
 
 const REDIS_URL = 'https://guard.upstash.test';
@@ -593,6 +600,58 @@ describe('composition', () => {
       // Resolves to undefined without analytics, so only settlement is asserted.
       expect(check.pending).toBeInstanceOf(Promise);
       await check.pending;
+    });
+  });
+
+  describe('without Redis', () => {
+    const memoryGuard = () =>
+      createSecurityGuard({
+        rateLimiter: createMemoryRateLimiter(),
+        replayStore: createMemoryReplayStore(),
+        dpop: true,
+      });
+
+    // What `@mita-auth/server/memory` is for: a guard that works before there is an account
+    // anywhere. `sent` staying empty is what proves no Redis was consulted.
+    it('completes the handshake on nothing but memory', async () => {
+      const instance = memoryGuard();
+      const challenge = await instance.verify(await dpopRequest({ nonce: undefined }));
+
+      expect(challenge.success).toBe(false);
+
+      const nonce = challenge.success
+        ? null
+        : challenge.response.headers.get(MITA_HEADERS.dpopNonce);
+
+      expect(nonce).not.toBeNull();
+
+      const accepted = await instance.verify(await dpopRequest({ nonce: nonce ?? '' }));
+
+      expect(accepted.success).toBe(true);
+      expect(sent).toEqual([]);
+    });
+
+    it('redeems a nonce exactly once, as the Redis store does', async () => {
+      const instance = memoryGuard();
+      const challenge = await instance.verify(await dpopRequest({ nonce: undefined }));
+      const nonce = challenge.success
+        ? ''
+        : (challenge.response.headers.get(MITA_HEADERS.dpopNonce) ?? '');
+
+      await instance.verify(await dpopRequest({ nonce }));
+      const replayed = await instance.verify(await dpopRequest({ nonce }));
+
+      expect(replayed.success).toBe(false);
+      expect(replayed.success ? null : replayed.reason).toBe('dpop_nonce_required');
+    });
+
+    // Refused while the guard is being built, rather than at the first request, where an
+    // absent client would look like an outage.
+    it('names the store it still needs when Redis is absent', () => {
+      expect(() => createSecurityGuard({})).toThrow(/rateLimiter/);
+      expect(() => createSecurityGuard({ rateLimiter: createMemoryRateLimiter() })).toThrow(
+        /replayStore/,
+      );
     });
   });
 

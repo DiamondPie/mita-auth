@@ -37,11 +37,26 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./memory": {
+      "import": {
+        "types": "./dist/memory.d.mts",
+        "default": "./dist/memory.mjs"
+      },
+      "require": {
+        "types": "./dist/memory.d.cts",
+        "default": "./dist/memory.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
+  "typesVersions": {
+    "*": {
+      "memory": ["./dist/memory.d.cts"]
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
