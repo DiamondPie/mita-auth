@@ -149,6 +149,35 @@ function commandNames() {
   return sent.map((command) => command[0]);
 }
 
+describe('redis option', () => {
+  it('builds a client when handed credentials', async () => {
+    const check = await createSecurityGuard({
+      redis: { url: REDIS_URL, token: 'test-token' },
+    }).verify(plainRequest());
+
+    expect(check.success).toBe(true);
+    expect(commandNames()).toContain('evalsha');
+  });
+
+  /**
+   * `@upstash/redis/cloudflare` exports its own `Redis` subclass, so an `instanceof` check
+   * against the default entry point's class rejects it and silently builds a replacement
+   * client with no URL. msw runs with `onUnhandledRequest: 'error'`, so a guard that ignored
+   * the client passed here would not reach the pipeline endpoint at all.
+   */
+  it('uses a client from another platform entry point as-is', async () => {
+    const { Redis: CloudflareRedis } = await import('@upstash/redis/cloudflare');
+    const client = new CloudflareRedis({ url: REDIS_URL, token: 'test-token', retry: false });
+
+    expect(client instanceof Redis).toBe(false);
+
+    const check = await createSecurityGuard({ redis: client }).verify(plainRequest());
+
+    expect(check.success).toBe(true);
+    expect(commandNames()).toContain('evalsha');
+  });
+});
+
 describe('rate limiting', () => {
   it('lets a request inside the window through', async () => {
     const check = await guard().verify(plainRequest());
