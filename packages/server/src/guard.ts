@@ -108,6 +108,12 @@ export interface GuardDPoPOptions {
 }
 
 export interface CreateSecurityGuardOptions {
+  /**
+   * An Upstash client, or the credentials to build one from.
+   *
+   * Any of the platform entry points will do — the `Redis` classes exported by
+   * `@upstash/redis`, `/cloudflare` and `/fastly` are structurally identical.
+   */
   redis: Redis | { url: string; token: string };
   rateLimit?: GuardRateLimitOptions;
   /** Enables Turnstile verification. Omit to skip it. */
@@ -148,10 +154,12 @@ export interface SecurityGuard {
 export function createSecurityGuard(options: CreateSecurityGuardOptions): SecurityGuard {
   const { rateLimit = {}, turnstile, dpop, resolveUrl = (request) => request.url, now } = options;
 
-  const redis =
-    options.redis instanceof Redis
-      ? options.redis
-      : new Redis({ url: options.redis.url, token: options.redis.token });
+  // Told apart by shape rather than by `instanceof`. `@upstash/redis` publishes a separate
+  // subclass per platform entry point — `/cloudflare` and `/fastly` alongside the default
+  // Node one — and they share a base class but not an identity. An identity check would
+  // reject precisely the entry points those runtimes are meant to use, and would then
+  // quietly build a second client with no URL at all.
+  const redis = 'url' in options.redis ? new Redis(options.redis) : options.redis;
 
   const dpopOptions: GuardDPoPOptions | undefined = dpop === true ? {} : dpop;
 
