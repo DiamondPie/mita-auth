@@ -12,6 +12,7 @@ import {
   markTurnstileError,
   markTurnstilePending,
   resetMitaState,
+  resetTurnstileChallenge,
   setTurnstileToken,
 } from './state';
 
@@ -99,6 +100,17 @@ describe('mita state', () => {
 
       expect($turnstileStatus.get()).toBe(status);
       expect($turnstileToken.get()).toBeNull();
+    });
+
+    it('forgets a spent challenge without disturbing the session', () => {
+      markSessionActive();
+      setTurnstileToken('token-1');
+      consumeTurnstileToken();
+
+      resetTurnstileChallenge();
+
+      expect($turnstileStatus.get()).toBe('idle');
+      expect($sessionStatus.get()).toBe('active');
     });
 
     // The widget resets itself off this transition, so a listener must observe the token

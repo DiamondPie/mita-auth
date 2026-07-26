@@ -114,11 +114,11 @@ function siteverifyHandler(accepts: boolean) {
   });
 }
 
-function apiHandler() {
+function apiHandler({ turnstileRequired = true } = {}) {
   const guard = createSecurityGuard({
     redis: { url: REDIS_URL, token: 'contract-token' },
     rateLimit: { identifier: () => 'contract' },
-    turnstile: { secretKey: 'secret' },
+    turnstile: { secretKey: 'secret', required: turnstileRequired },
     dpop: true,
   });
 
@@ -160,6 +160,26 @@ describe('client and server contract', () => {
 
     expect(attempts.map((attempt) => attempt.turnstile)).toEqual(['token-1', 'token-1']);
     expect(siteverifyCalls).toBe(1);
+  });
+
+  /**
+   * The guard redeems a nonce with `GETDEL`, so two proofs signed over the same one cannot
+   * both be accepted. Turnstile is switched off here because one widget hands out one token
+   * and a burst could not carry one each — the nonce is what is under test.
+   */
+  it('lets a concurrent burst through, at the cost of one shared handshake', async () => {
+    server.use(apiHandler({ turnstileRequired: false }));
+    const api = client();
+
+    const responses = await Promise.all([
+      api.post(API_URL),
+      api.post(API_URL),
+      api.post(API_URL),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    expect(attempts).toHaveLength(4);
+    expect($isAuthenticated.get()).toBe(true);
   });
 
   it('needs no further handshake once a nonce is in hand', async () => {

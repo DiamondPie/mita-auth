@@ -5,6 +5,7 @@ import {
   expireTurnstileToken,
   markTurnstileError,
   markTurnstilePending,
+  resetTurnstileChallenge,
   setTurnstileToken,
 } from './state';
 
@@ -92,6 +93,9 @@ export class MitaTurnstileElement extends ElementBase {
   /** Discards the current challenge and asks Cloudflare for another. */
   reset(): void {
     if (this.#api === undefined || this.#widgetId === undefined) {
+      // There is no widget to ask. Leaving a spent challenge on record would strand every
+      // later request without a token, with nothing left on screen able to clear it.
+      resetTurnstileChallenge();
       return;
     }
 

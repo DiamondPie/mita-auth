@@ -6,6 +6,7 @@
  * what ships to browsers nor what is under test here.
  */
 import { MITA_HEADERS, generateDPoPKeyPair, verifyDPoP, type DPoPKeyPair } from '@mita-auth/core';
+import { isHTTPError } from 'ky';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,6 +82,32 @@ function nonceHeader(nonce: string) {
   return { [MITA_HEADERS.dpopNonce]: nonce };
 }
 
+/**
+ * Stands in for the server's nonce store, whose defining trait is that a nonce is redeemed
+ * exactly once. A handler that kept accepting the same one would let every concurrency bug
+ * in this file pass.
+ */
+function nonceStore() {
+  const live = new Set<string>();
+  let issued = 0;
+
+  return http.all(API_URL, async ({ request }) => {
+    const proof = request.headers.get(MITA_HEADERS.dpop) ?? '';
+    attempts.push({ proof, turnstile: request.headers.get(MITA_HEADERS.turnstile) });
+
+    const { nonce } = await verifyDPoP(proof, { method: request.method, url: API_URL });
+    const redeemed = nonce !== undefined && live.delete(nonce);
+
+    issued += 1;
+    const replacement = `nonce-${issued}`;
+    live.add(replacement);
+
+    return redeemed
+      ? accepted(replacement)
+      : challenge('use_dpop_nonce', 'dpop_nonce_required', nonceHeader(replacement));
+  });
+}
+
 /** Retry delays are irrelevant to what is under test and would only slow the suite. */
 function client(options: Parameters<typeof createProtectedClient>[0] = {}) {
   return createProtectedClient({ keyPair, retry: { delay: () => 0 }, ...options });
@@ -95,6 +122,32 @@ describe('createProtectedClient', () => {
     expect(() => createProtectedClient({ nonceRetryLimit: -1 })).toThrow(
       /non-negative integer/,
     );
+  });
+
+  // ky would refuse the handshake retry and throw a forced-retry error carrying neither a
+  // status code nor a callback, which is close to undiagnosable from the outside.
+  it('rejects a ky retry budget too small for the handshake', () => {
+    expect(() => createProtectedClient({ retry: 0 })).toThrow(/retry\.limit/);
+    expect(() => createProtectedClient({ nonceRetryLimit: 2, retry: { limit: 1 } })).toThrow(
+      /retry\.limit/,
+    );
+  });
+
+  it('sends through a caller-supplied fetch', async () => {
+    server.use(queue(() => accepted('nonce-1')));
+    const sent = vi.fn();
+
+    await client({
+      fetch: async (input, init) => {
+        sent();
+        return globalThis.fetch(input, init);
+      },
+    })
+      .post(API_URL)
+      .json();
+
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(attempts[0]?.proof).not.toBe('');
   });
 
   describe('dpop proofs', () => {
@@ -180,6 +233,76 @@ describe('createProtectedClient', () => {
 
       expect(attempts).toHaveLength(1);
     });
+
+    // A 503 eats one of ky's attempts before the handshake ever starts, so a budget that was
+    // large enough at construction time can still run out mid-call.
+    it('reports a ky budget spent mid-call as a 401, not as a forced retry', async () => {
+      server.use(
+        queue(
+          () => HttpResponse.json({}, { status: 503 }),
+          () => nonceChallenge('nonce-1'),
+          () => nonceChallenge('nonce-2'),
+          () => nonceChallenge('nonce-3'),
+        ),
+      );
+      const onUnauthorized = vi.fn();
+
+      const failure = await client({
+        nonceRetryLimit: 3,
+        retry: { limit: 3, delay: () => 0 },
+        onUnauthorized,
+      })
+        .get(API_URL)
+        .catch((cause: unknown) => cause);
+
+      expect(isHTTPError(failure) && failure.response.status).toBe(401);
+      expect(onUnauthorized).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'nonce_exhausted' }),
+      );
+    });
+  });
+
+  /**
+   * A nonce is redeemed once, so attempts that sign over the same one cannot both be
+   * accepted. These lock the behaviour that made every concurrent request but one fail:
+   * attempts queue, and each signs over what the one before it brought back.
+   */
+  describe('concurrent calls', () => {
+    it('lets a cold-start burst through, every one of them', async () => {
+      server.use(nonceStore());
+      const api = client();
+
+      const responses = await Promise.all([
+        api.post(API_URL),
+        api.post(API_URL),
+        api.post(API_URL),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+      expect($isAuthenticated.get()).toBe(true);
+    });
+
+    it('spends one handshake for the burst, not one per request', async () => {
+      server.use(nonceStore());
+      const api = client();
+
+      await Promise.all([api.post(API_URL), api.post(API_URL), api.post(API_URL)]);
+
+      // Three calls plus the single cold start that RFC 9449 makes unavoidable. Anything
+      // higher means requests are being retried against a nonce someone else had taken.
+      expect(attempts).toHaveLength(4);
+    });
+
+    it('adds no round trips at all once a nonce is in hand', async () => {
+      server.use(nonceStore());
+      const api = client();
+
+      await api.post(API_URL);
+      attempts.length = 0;
+      await Promise.all([api.post(API_URL), api.post(API_URL), api.post(API_URL)]);
+
+      expect(attempts).toHaveLength(3);
+    });
   });
 
   describe('unauthorized', () => {
@@ -233,6 +356,28 @@ describe('createProtectedClient', () => {
       await client().post(API_URL).json();
 
       expect($isAuthenticated.get()).toBe(false);
+    });
+
+    // `state.ts` reserves `unauthorized` for a rejection retrying cannot fix. A spent
+    // handshake budget is not one: the next request signs over the nonce this one issued.
+    it('keeps the session when only the handshake budget ran out', async () => {
+      server.use(
+        queue(
+          () => accepted('nonce-1'),
+          () => nonceChallenge('nonce-2'),
+          () => nonceChallenge('nonce-3'),
+        ),
+      );
+      const onUnauthorized = vi.fn();
+      const api = client({ onUnauthorized });
+
+      await api.post(API_URL).json();
+      await expect(api.post(API_URL)).rejects.toThrow();
+
+      expect(onUnauthorized).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'nonce_exhausted' }),
+      );
+      expect($isAuthenticated.get()).toBe(true);
     });
 
     it('drops authentication when a proof is rejected', async () => {

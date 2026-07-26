@@ -14,12 +14,16 @@ import { consumeTurnstileToken, markSessionActive, markSessionUnauthorized } fro
 /** How many times one request may redo the RFC 9449 nonce handshake before giving up. */
 export const DEFAULT_NONCE_RETRY_LIMIT = 1;
 
+/** ky's own default, which stands whenever the caller passes no `retry` option. */
+const DEFAULT_KY_RETRY_LIMIT = 2;
+
 /**
  * Why a request was not authorized.
  *
- * `nonce_exhausted` means the server kept asking for a new nonce past the retry budget,
- * which points at the server's nonce store rather than at this client. `unauthorized`
- * covers a 401 that carried no DPoP challenge this client understands.
+ * `nonce_exhausted` means the handshake budget ran out before the server stopped asking for
+ * a new nonce; it says nothing about this browser's key pair, which is why it leaves the
+ * session status alone. `unauthorized` covers a 401 that carried no DPoP challenge this
+ * client understands.
  */
 export type UnauthorizedReason = 'invalid_dpop_proof' | 'nonce_exhausted' | 'unauthorized';
 
@@ -48,13 +52,15 @@ export interface CreateProtectedClientOptions extends Options {
 const DPOP_CHALLENGE_PATTERN = new RegExp(`^${DPOP_AUTH_SCHEME}(?:\\s|$)`, 'i');
 const CHALLENGE_ERROR_PATTERN = /\berror="([^"]*)"/;
 
+const ignore = (): void => {};
+
 /**
  * Builds a `ky` instance that speaks Mita's wire protocol.
  *
- * Every request carries a freshly signed DPoP proof. The server issues a `DPoP-Nonce`
- * with each answer and accepts each one exactly once, so the proof has to be re-signed
- * for every attempt — including retries that failed for unrelated reasons, since a `jti`
- * is equally single-use.
+ * Every attempt carries a freshly signed DPoP proof. The server issues a `DPoP-Nonce` with
+ * each answer and accepts each one exactly once, so the proof has to be re-signed for every
+ * attempt — including retries that failed for unrelated reasons, since a `jti` is equally
+ * single-use.
  *
  * A client with no nonce yet cannot avoid being turned away once: RFC 9449 defines that
  * first `use_dpop_nonce` rejection as the handshake. It is resolved here rather than
@@ -68,6 +74,7 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
     turnstile = true,
     onUnauthorized,
     hooks,
+    fetch: callerFetch,
     ...kyOptions
   } = options;
 
@@ -78,8 +85,26 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
     );
   }
 
+  const retryLimit =
+    typeof kyOptions.retry === 'number'
+      ? kyOptions.retry
+      : (kyOptions.retry?.limit ?? DEFAULT_KY_RETRY_LIMIT);
+
+  // ky bounds the total number of attempts, handshakes included. A budget it cannot honour
+  // would surface as a forced-retry error carrying no status code and no callback, which is
+  // close to undiagnosable from the outside; refusing it here costs one line at startup.
+  if (retryLimit < nonceRetryLimit) {
+    throw new MitaError(
+      'client.retry_limit_too_low',
+      `A nonce retry limit of ${nonceRetryLimit} needs \`retry.limit\` to be at least as high, received ${retryLimit}. Set \`nonceRetryLimit: 0\` to opt out of the handshake as well.`,
+    );
+  }
+
   let pendingKeyPair: Promise<DPoPKeyPair> | undefined;
   let nonce: string | undefined;
+
+  /** Tail of the chain every attempt queues behind. See {@link attempt}. */
+  let queue: Promise<unknown> = Promise.resolve();
 
   /**
    * Handshake budget for one call, kept apart from `retry.limit` so that a backoff spent
@@ -87,6 +112,9 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
    * `retry.limit` still bounds the total number of attempts.
    */
   const handshakes = new WeakMap<object, { retries: number }>();
+
+  const baseFetch: NonNullable<Options['fetch']> =
+    callerFetch ?? ((input, init) => globalThis.fetch(input, init));
 
   function resolveKeyPair(): Promise<DPoPKeyPair> {
     pendingKeyPair ??= Promise.resolve(
@@ -96,37 +124,76 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
     return pendingKeyPair;
   }
 
-  async function protect(request: Request): Promise<void> {
-    const pair = await resolveKeyPair();
+  /**
+   * Signs an attempt, sends it, and absorbs the answer as one indivisible step.
+   *
+   * A nonce is spent by the first proof that echoes it, so two attempts signed over the same
+   * one cannot both be accepted. Queueing the whole exchange — read the nonce, spend it,
+   * take the replacement — is what keeps concurrent calls on one instance from racing for
+   * it: each attempt signs over whatever the attempt before it brought back, and the burst
+   * costs no more requests than it would have serially.
+   *
+   * The queue holds per attempt rather than per call, so a backoff between two attempts does
+   * not block the other calls, and it advances from a single `then` that a network error, a
+   * timeout or an abort all reach. A hook pair could not offer either: `afterResponse` never
+   * runs when there is no response, and ky has no hook for "this call is over".
+   *
+   * Signing here also puts the proof after every caller hook has finished rewriting the
+   * request, which is where it has to be — the proof binds the method and URL it is sent to.
+   */
+  const attempt = (request: Request, init?: RequestInit): Promise<Response> => {
+    const run = async (): Promise<Response> => {
+      request.headers.set(
+        MITA_HEADERS.dpop,
+        await signDPoP(await resolveKeyPair(), {
+          method: request.method,
+          url: request.url,
+          ...(nonce === undefined ? {} : { nonce }),
+        }),
+      );
 
-    request.headers.set(
-      MITA_HEADERS.dpop,
-      await signDPoP(pair, {
-        method: request.method,
-        url: request.url,
-        ...(nonce === undefined ? {} : { nonce }),
-      }),
-    );
+      const response = await baseFetch(request, init);
+      const issued = response.headers.get(MITA_HEADERS.dpopNonce);
 
-    // A retry keeps the token it already carries. The server spends it only after the
-    // proof has been accepted, and the widget has no second token to offer until the
-    // visitor solves another challenge.
-    if (turnstile && !request.headers.has(MITA_HEADERS.turnstile)) {
-      const token = consumeTurnstileToken();
+      if (issued !== null) {
+        nonce = issued;
 
-      if (token !== null) {
-        request.headers.set(MITA_HEADERS.turnstile, token);
+        // Only a server that actually ran the DPoP path hands back a nonce, so this is the
+        // point at which a proof is known to have been accepted.
+        if (response.ok) {
+          markSessionActive();
+        }
       }
-    }
-  }
+
+      return response;
+    };
+
+    const settled = queue.then(run, run);
+
+    // The queue tracks arrival, not outcome: a failed attempt must not wedge the ones behind
+    // it, and its rejection is the caller's to handle rather than the chain's.
+    queue = settled.then(ignore, ignore);
+
+    return settled;
+  };
 
   function reject(request: Request, response: Response, reason: UnauthorizedReason): void {
-    markSessionUnauthorized();
+    // A spent handshake budget is not an authorization verdict. `state.ts` reserves
+    // `unauthorized` for a rejection retrying cannot fix, and a nonce is not one of those:
+    // the next request signs over the one this response just issued.
+    if (reason !== 'nonce_exhausted') {
+      markSessionUnauthorized();
+    }
+
     onUnauthorized?.({ request, response, reason });
   }
 
   return ky.create({
     ...kyOptions,
+    // ky hands its `fetch` a `Request` on every attempt; the option's wider signature is the
+    // Fetch API's, not ky's. Narrowing it keeps the signing path free of a branch that ky
+    // cannot take, and a drift would fail every request rather than hide.
+    fetch: attempt as NonNullable<Options['fetch']>,
     hooks: {
       ...hooks,
       init: [
@@ -139,41 +206,25 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
           handshakes.set(callOptions.context, { retries: 0 });
         },
       ],
-      // Mita signs last so that the proof binds the request a user hook has finished
-      // rewriting, rather than the one it was handed.
       beforeRequest: [
         ...(hooks?.beforeRequest ?? []),
-        async ({ request }) => {
-          await protect(request);
-        },
-      ],
-      beforeRetry: [
-        ...(hooks?.beforeRetry ?? []),
-        async ({ request }) => {
-          await protect(request);
-        },
-      ],
-      // Mita reads first, so the nonce is taken off the server's own response before a
-      // user hook can replace it.
-      afterResponse: [
-        ({ request, response, options: callOptions }) => {
-          const issued = response.headers.get(MITA_HEADERS.dpopNonce);
+        ({ request }) => {
+          // One call, one token. This runs before ky takes the clone it retries with, so a
+          // handshake resends the same token — the server spends it only after the proof has
+          // been accepted, and the widget has no second one to offer until the visitor
+          // solves another challenge.
+          if (turnstile && !request.headers.has(MITA_HEADERS.turnstile)) {
+            const token = consumeTurnstileToken();
 
-          if (issued !== null) {
-            nonce = issued;
-          }
-
-          if (response.ok) {
-            // Only a server that actually ran the DPoP path hands back a nonce, so this
-            // is the point at which a proof is known to have been accepted.
-            if (issued !== null) {
-              markSessionActive();
+            if (token !== null) {
+              request.headers.set(MITA_HEADERS.turnstile, token);
             }
-
-            return;
           }
-
-          if (response.status !== 401) {
+        },
+      ],
+      afterResponse: [
+        ({ request, response, options: callOptions, retryCount }) => {
+          if (response.ok || response.status !== 401) {
             return;
           }
 
@@ -185,17 +236,21 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
           }
 
           const state = handshakes.get(callOptions.context);
+          const attemptsLeft = (callOptions.retry.limit ?? DEFAULT_KY_RETRY_LIMIT) - retryCount;
 
-          if (state === undefined || state.retries >= nonceRetryLimit) {
+          // Forcing a retry ky will not run turns a 401 into an opaque forced-retry error,
+          // taking the status code and `onUnauthorized` with it. Better to report the 401.
+          if (state === undefined || state.retries >= nonceRetryLimit || attemptsLeft <= 0) {
             reject(request, response, 'nonce_exhausted');
             return;
           }
 
           state.retries += 1;
 
-          // The nonce just absorbed is only usable by a proof signed over it, which is
-          // what `beforeRetry` produces.
-          return ky.retry({ code: 'use_dpop_nonce' });
+          // The nonce this response carried has already been absorbed, and the next attempt
+          // signs over it. There is nothing to back off from — the server has just handed
+          // over exactly what the retry needs — so the usual delay is skipped.
+          return ky.retry({ code: 'use_dpop_nonce', delay: 0 });
         },
         ...(hooks?.afterResponse ?? []),
       ],
