@@ -278,6 +278,31 @@ describe('<mita-turnstile>', () => {
     expect(lastEvent().detail).toEqual({ code: 'script_unavailable' });
   });
 
+  // A script the page already carried may have finished loading before this element ran, in
+  // which case `load` never fires again. Without a backstop the widget sits at `pending` for
+  // as long as the page lives, with no error anywhere to explain it.
+  it('gives up on a script that reports neither success nor failure', async () => {
+    vi.useFakeTimers();
+    delete window.turnstile;
+
+    try {
+      const script = document.createElement('script');
+      script.src = TURNSTILE_SCRIPT_URL;
+      document.head.append(script);
+
+      const element = document.createElement(MITA_TURNSTILE_TAG);
+      element.setAttribute('site-key', 'site');
+      document.body.append(element);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect($turnstileStatus.get()).toBe('error');
+      expect(lastEvent().detail).toEqual({ code: 'script_unavailable' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('reports a script the browser refuses to fetch', async () => {
     delete window.turnstile;
     const script = document.createElement('script');

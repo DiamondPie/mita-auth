@@ -28,6 +28,9 @@ export const MITA_TURNSTILE_EVENTS = {
 export const TURNSTILE_SCRIPT_URL =
   'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
+/** Backstop for a script load that reports neither success nor failure. */
+const SCRIPT_LOAD_TIMEOUT_MS = 10_000;
+
 export interface TurnstileRenderOptions {
   sitekey: string;
   theme?: 'auto' | 'light' | 'dark';
@@ -237,6 +240,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
 
   const settled = new Promise<TurnstileApi>((resolve, reject) => {
     const fail = (): void => {
+      clearTimeout(timer);
       reject(
         new MitaError(
           'client.turnstile_script_unavailable',
@@ -244,6 +248,12 @@ function loadTurnstile(): Promise<TurnstileApi> {
         ),
       );
     };
+
+    // Reusing a script the page already carries means inheriting whatever state it is in,
+    // and a script that finished loading before this ran will never fire `load` again. If
+    // an extension or a CSP kept it from publishing an API, nothing would ever settle this
+    // promise and the widget would sit at `pending` for as long as the page lived.
+    const timer = setTimeout(fail, SCRIPT_LOAD_TIMEOUT_MS);
 
     script.addEventListener(
       'load',
@@ -255,6 +265,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
           return;
         }
 
+        clearTimeout(timer);
         resolve(api);
       },
       { once: true },

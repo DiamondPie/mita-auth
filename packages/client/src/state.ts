@@ -1,3 +1,18 @@
+/**
+ * Shared reactive state for one browser tab.
+ *
+ * The atoms below are module-level, which in a browser is exactly one per page and in a
+ * server process is exactly one per **process** — shared by every request it handles. That
+ * is safe today only because every writer runs in the browser: the client's hooks, and the
+ * Turnstile element. Nothing enforces it. Calling `markSessionActive()` from a server
+ * component or a route handler would leak one visitor's session state to the next, so treat
+ * this module as browser-only and read-only on the server.
+ *
+ * A second copy of `@mita-auth/client` on one page has the same shape of problem from the
+ * other direction: `<mita-turnstile>` and `createProtectedClient` would bind to different
+ * stores, and the symptom is a widget that visibly solves while every request comes back
+ * `403 turnstile_missing`.
+ */
 import { atom, computed, readonlyType, type ReadableAtom } from 'nanostores';
 
 /**
