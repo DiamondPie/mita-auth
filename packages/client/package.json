@@ -3,6 +3,24 @@
   "version": "0.0.0",
   "description": "Browser client: protected fetch (ky), reactive auth state (nanostores), <mita-turnstile> web component.",
   "license": "MIT",
+  "keywords": [
+    "mita",
+    "dpop",
+    "turnstile",
+    "web-component",
+    "nanostores",
+    "ky",
+    "browser"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DiamondPie/mita-auth.git",
+    "directory": "packages/client"
+  },
+  "homepage": "https://github.com/DiamondPie/mita-auth/tree/main/packages/client#readme",
+  "bugs": {
+    "url": "https://github.com/DiamondPie/mita-auth/issues"
+  },
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
   "sideEffects": ["./dist/turnstile.mjs", "./dist/turnstile.cjs"],

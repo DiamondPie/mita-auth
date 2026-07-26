@@ -3,6 +3,22 @@
   "version": "0.0.0",
   "description": "Thin React 18+ bindings (useStore) over @mita-auth/client's nanostores state.",
   "license": "MIT",
+  "keywords": [
+    "mita",
+    "react",
+    "hooks",
+    "turnstile",
+    "dpop"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DiamondPie/mita-auth.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/DiamondPie/mita-auth/tree/main/packages/react#readme",
+  "bugs": {
+    "url": "https://github.com/DiamondPie/mita-auth/issues"
+  },
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
   "sideEffects": false,

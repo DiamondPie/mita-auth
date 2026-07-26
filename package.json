@@ -4,6 +4,13 @@
   "private": true,
   "description": "A batteries-included, framework-agnostic authentication & anti-abuse protection SDK.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DiamondPie/mita-auth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DiamondPie/mita-auth/issues"
+  },
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
   "engines": {
