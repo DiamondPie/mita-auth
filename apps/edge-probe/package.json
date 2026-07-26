@@ -1,0 +1,23 @@
+{
+  "name": "@mita-playground/edge-probe",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal Worker that reports which platform primitives @mita-auth/server relies on actually work.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:remote": "wrangler dev --remote",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf .wrangler dist"
+  },
+  "dependencies": {
+    "@mita-auth/core": "workspace:*",
+    "@mita-auth/server": "workspace:*",
+    "@upstash/redis": "^1.38.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.114.0"
+  }
+}

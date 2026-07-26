@@ -20,6 +20,9 @@ export default tseslint.config(
       '**/.nuxt/**',
       '**/.output/**',
       '**/out/**',
+      // Emitted by `wrangler types`: the whole Workers runtime surface as one .d.ts, whose
+      // lint output nobody can act on.
+      '**/worker-configuration.d.ts',
     ],
   },
   js.configs.recommended,

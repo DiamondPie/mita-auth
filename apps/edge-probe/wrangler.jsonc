@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mita-edge-probe",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  // No `compatibility_flags`, and `nodejs_compat` least of all: @mita-auth/server claims to
+  // be Web-standard, and a Worker that only runs with the Node shim would falsify that
+  // claim rather than reveal a patch to apply.
+  "observability": { "enabled": true }
+}
