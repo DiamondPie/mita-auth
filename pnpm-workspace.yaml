@@ -1,6 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+  # The playground is a folder of sibling demos, not a package itself — it has no
+  # package.json, which is what keeps `apps/*` from claiming it.
+  - "apps/*/*"
 allowBuilds:
   # Its postinstall only copies the browser service worker; tests intercept in Node.
   msw: false
