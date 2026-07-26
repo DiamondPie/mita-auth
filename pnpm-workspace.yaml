@@ -5,6 +5,8 @@ packages:
   # package.json, which is what keeps `apps/*` from claiming it.
   - "apps/*/*"
 allowBuilds:
+  # Its postinstall links the platform binary the Nuxt toolchain actually runs.
+  esbuild: true
   # Its postinstall only copies the browser service worker; tests intercept in Node.
   msw: false
   # Next pulls it in for image optimisation, which neither demo uses.

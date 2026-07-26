@@ -1,0 +1,29 @@
+{
+  "name": "@mita-playground/nuxt",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Nuxt comment demo wired to @mita-auth/vue and @mita-auth/server.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3001",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "clean": "rimraf .nuxt .output"
+  },
+  "dependencies": {
+    "@mita-auth/client": "workspace:*",
+    "@mita-auth/core": "workspace:*",
+    "@mita-auth/server": "workspace:*",
+    "@mita-auth/vue": "workspace:*",
+    "@mita-playground/fake-upstash": "workspace:*",
+    "ky": "^2.0.2",
+    "nuxt": "^4.5.0",
+    "vue": "^3.5.40"
+  },
+  "devDependencies": {
+    "vue-tsc": "^3.3.8"
+  }
+}
