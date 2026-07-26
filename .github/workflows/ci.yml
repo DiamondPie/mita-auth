@@ -79,6 +79,26 @@ jobs:
 
       - run: pnpm turbo run test --filter @mita-auth/react
 
+  # @mita-auth/server already keeps Node-only APIs out at compile time with
+  # lib: ["ES2022","WebWorker"] + types: []. This job is the runtime backstop, not the only
+  # line of defence — and it is not a Workers check either: @edge-runtime/vm is a V8 isolate
+  # with Edge globals, and reproduces neither the frozen clock nor isolate recycling.
+  server-edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm turbo run test:edge --filter @mita-auth/server
+
   # Same reasoning for @mita-auth/vue's ^3.3.1: the workspace installs Vue 3.5, and
   # @nanostores/vue's own floor is what puts 3.3 in range.
   vue-3-3:
