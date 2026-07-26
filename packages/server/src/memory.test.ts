@@ -100,20 +100,27 @@ describe('createMemoryReplayStore', () => {
     await expect(store.rememberProof(claim)).resolves.toEqual({ ok: true });
   });
 
-  // Nothing sweeps the map on a timer, so a write does it periodically. The point is that
-  // the store keeps answering correctly across that boundary.
-  it('stays correct across a sweep', async () => {
+  // Nothing sweeps the map on a timer, so a write does it periodically. The clock moves
+  // through the loop so that the sweep has dead keys to reclaim by the time it runs, and
+  // the point of the assertions is that the store still answers correctly afterwards.
+  it('stays correct across a sweep that reclaims keys', async () => {
     const time = clock();
     const store = createMemoryReplayStore({ now: time.now });
 
     for (let index = 0; index < 300; index += 1) {
       await store.rememberProof({ jti: `jti-${index}`, jkt: 'jkt-1', ttlMs: 100 });
+      time.advance(1);
     }
 
-    time.advance(101);
-
+    // Long expired, and swept along the way: claimable again, and only once.
     await expect(store.rememberProof({ jti: 'jti-0', jkt: 'jkt-1' })).resolves.toEqual({ ok: true });
     await expect(store.rememberProof({ jti: 'jti-0', jkt: 'jkt-1' })).resolves.toEqual({
+      ok: false,
+      reason: 'replayed',
+    });
+
+    // Written 50 ms ago with a 100 ms lifetime, so it survived the sweep and is still spent.
+    await expect(store.rememberProof({ jti: 'jti-250', jkt: 'jkt-1' })).resolves.toEqual({
       ok: false,
       reason: 'replayed',
     });
