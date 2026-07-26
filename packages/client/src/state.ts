@@ -1,4 +1,4 @@
-import { atom, batch, computed, readonlyType, type ReadableAtom } from 'nanostores';
+import { atom, computed, readonlyType, type ReadableAtom } from 'nanostores';
 
 /**
  * How far this browser has got with the server's DPoP exchange.
@@ -19,9 +19,25 @@ export type SessionStatus = 'idle' | 'active' | 'unauthorized';
  */
 export type TurnstileStatus = 'idle' | 'pending' | 'solved' | 'spent' | 'expired' | 'error';
 
+/**
+ * The widget's status and its token, held as one value.
+ *
+ * They describe a single fact between them, so they are stored together rather than kept in
+ * step by hand: one `set` cannot leave a subscriber looking at a `solved` status with no
+ * token, or a `spent` one that still has it. An earlier version paired two atoms inside
+ * nanostores' `batch()`, which reads the same but is not equivalent — `batch` is published
+ * with a `@__NO_SIDE_EFFECTS__` annotation, so a bundler is entitled to delete a call whose
+ * result goes unused, and every writer below silently became a no-op in a production build.
+ */
+interface TurnstileChallenge {
+  readonly status: TurnstileStatus;
+  readonly token: string | null;
+}
+
+const IDLE_CHALLENGE: TurnstileChallenge = { status: 'idle', token: null };
+
 const $writableSessionStatus = atom<SessionStatus>('idle');
-const $writableTurnstileStatus = atom<TurnstileStatus>('idle');
-const $writableTurnstileToken = atom<string | null>(null);
+const $writableTurnstile = atom<TurnstileChallenge>(IDLE_CHALLENGE);
 
 export const $sessionStatus: ReadableAtom<SessionStatus> = readonlyType($writableSessionStatus);
 
@@ -31,16 +47,20 @@ export const $isAuthenticated: ReadableAtom<boolean> = computed(
   (status) => status === 'active',
 );
 
-export const $turnstileStatus: ReadableAtom<TurnstileStatus> =
-  readonlyType($writableTurnstileStatus);
+export const $turnstileStatus: ReadableAtom<TurnstileStatus> = computed(
+  $writableTurnstile,
+  (challenge) => challenge.status,
+);
 
 /**
  * The unspent Turnstile token, or `null` when there is nothing to send.
  *
- * Exposed read-only because the token and {@link $turnstileStatus} describe one fact
- * between them; writing either alone would let them disagree.
+ * A view onto the same value {@link $turnstileStatus} reads, so the two can never disagree.
  */
-export const $turnstileToken: ReadableAtom<string | null> = readonlyType($writableTurnstileToken);
+export const $turnstileToken: ReadableAtom<string | null> = computed(
+  $writableTurnstile,
+  (challenge) => challenge.token,
+);
 
 export function markSessionActive(): void {
   $writableSessionStatus.set('active');
@@ -52,17 +72,11 @@ export function markSessionUnauthorized(): void {
 
 /** Announces that a widget is on screen and waiting on the visitor. */
 export function markTurnstilePending(): void {
-  batch(() => {
-    $writableTurnstileStatus.set('pending');
-    $writableTurnstileToken.set(null);
-  });
+  $writableTurnstile.set({ status: 'pending', token: null });
 }
 
 export function setTurnstileToken(token: string): void {
-  batch(() => {
-    $writableTurnstileStatus.set('solved');
-    $writableTurnstileToken.set(token);
-  });
+  $writableTurnstile.set({ status: 'solved', token });
 }
 
 /**
@@ -73,39 +87,32 @@ export function setTurnstileToken(token: string): void {
  * watching for this transition.
  */
 export function consumeTurnstileToken(): string | null {
-  const token = $writableTurnstileToken.get();
+  const { token } = $writableTurnstile.get();
 
   if (token === null) {
     return null;
   }
 
-  batch(() => {
-    $writableTurnstileStatus.set('spent');
-    $writableTurnstileToken.set(null);
-  });
+  $writableTurnstile.set({ status: 'spent', token: null });
 
   return token;
 }
 
 export function expireTurnstileToken(): void {
-  batch(() => {
-    $writableTurnstileStatus.set('expired');
-    $writableTurnstileToken.set(null);
-  });
+  $writableTurnstile.set({ status: 'expired', token: null });
 }
 
 export function markTurnstileError(): void {
-  batch(() => {
-    $writableTurnstileStatus.set('error');
-    $writableTurnstileToken.set(null);
-  });
+  $writableTurnstile.set({ status: 'error', token: null });
 }
 
-/** Returns every store to its initial value. Intended for sign-out paths and tests. */
+/**
+ * Returns every store to its initial value. Intended for sign-out paths and tests.
+ *
+ * The two writes are not coordinated because nothing derives from both atoms at once; the
+ * only pairing that has to hold is inside {@link $writableTurnstile}, and that is one value.
+ */
 export function resetMitaState(): void {
-  batch(() => {
-    $writableSessionStatus.set('idle');
-    $writableTurnstileStatus.set('idle');
-    $writableTurnstileToken.set(null);
-  });
+  $writableSessionStatus.set('idle');
+  $writableTurnstile.set(IDLE_CHALLENGE);
 }
