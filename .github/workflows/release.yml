@@ -28,7 +28,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm build
+      # Only the published packages. `pnpm build` would also build the playground demos,
+      # which nothing here publishes and whose failure would block a release.
+      - run: pnpm turbo run build --filter="./packages/*"
 
       - name: Create release PR or publish
         uses: changesets/action@v1
