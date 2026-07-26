@@ -11,8 +11,25 @@ import {
 
 export const MITA_TURNSTILE_TAG = 'mita-turnstile';
 
+/**
+ * Names the element dispatches under, all prefixed.
+ *
+ * `error` on its own would have been the costly one: the event bubbles and is composed, so
+ * it reaches `window`, where front-end monitoring almost universally listens — a visitor who
+ * simply failed a challenge would be reported as a page error. The other two are prefixed
+ * for the sake of one consistent set rather than because anything collides with them.
+ */
+export const MITA_TURNSTILE_EVENTS = {
+  verified: 'mita-verified',
+  expired: 'mita-expired',
+  error: 'mita-error',
+} as const;
+
 export const TURNSTILE_SCRIPT_URL =
   'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+
+/** Backstop for a script load that reports neither success nor failure. */
+const SCRIPT_LOAD_TIMEOUT_MS = 10_000;
 
 export interface TurnstileRenderOptions {
   sitekey: string;
@@ -148,11 +165,11 @@ export class MitaTurnstileElement extends ElementBase {
       ...(size === null ? {} : { size: size as NonNullable<TurnstileRenderOptions['size']> }),
       callback: (token) => {
         setTurnstileToken(token);
-        this.#emit('verified', { token });
+        this.#emit(MITA_TURNSTILE_EVENTS.verified, { token });
       },
       'expired-callback': () => {
         expireTurnstileToken();
-        this.#emit('expired', null);
+        this.#emit(MITA_TURNSTILE_EVENTS.expired, null);
       },
       'error-callback': (code) => {
         this.#fail(code ?? 'unknown');
@@ -180,7 +197,7 @@ export class MitaTurnstileElement extends ElementBase {
 
   #fail(code: string): void {
     markTurnstileError();
-    this.#emit('error', { code });
+    this.#emit(MITA_TURNSTILE_EVENTS.error, { code });
   }
 
   #emit<TDetail>(type: string, detail: TDetail): void {
@@ -223,6 +240,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
 
   const settled = new Promise<TurnstileApi>((resolve, reject) => {
     const fail = (): void => {
+      clearTimeout(timer);
       reject(
         new MitaError(
           'client.turnstile_script_unavailable',
@@ -230,6 +248,12 @@ function loadTurnstile(): Promise<TurnstileApi> {
         ),
       );
     };
+
+    // Reusing a script the page already carries means inheriting whatever state it is in,
+    // and a script that finished loading before this ran will never fire `load` again. If
+    // an extension or a CSP kept it from publishing an API, nothing would ever settle this
+    // promise and the widget would sit at `pending` for as long as the page lived.
+    const timer = setTimeout(fail, SCRIPT_LOAD_TIMEOUT_MS);
 
     script.addEventListener(
       'load',
@@ -241,6 +265,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
           return;
         }
 
+        clearTimeout(timer);
         resolve(api);
       },
       { once: true },

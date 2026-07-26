@@ -1,7 +1,7 @@
 {
   "name": "@mita-auth/core",
   "version": "0.0.0",
-  "description": "Framework-agnostic core: DPoP signing, nonce generation, shared Zod schemas.",
+  "description": "Framework-agnostic core: DPoP signing, nonce generation, and the shared Zod schemas behind a Zod-free main entry.",
   "license": "MIT",
   "keywords": [
     "mita",
@@ -37,11 +37,26 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./schemas": {
+      "import": {
+        "types": "./dist/schemas.d.mts",
+        "default": "./dist/schemas.mjs"
+      },
+      "require": {
+        "types": "./dist/schemas.d.cts",
+        "default": "./dist/schemas.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
+  "typesVersions": {
+    "*": {
+      "schemas": ["./dist/schemas.d.cts"]
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -56,5 +71,8 @@
   "dependencies": {
     "jose": "^6.2.4",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "rolldown": "^1.2.0"
   }
 }

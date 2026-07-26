@@ -1,4 +1,4 @@
-import { commentSchema } from '@mita-auth/core';
+import { commentSchema } from '@mita-auth/core/schemas';
 import { toWebRequest } from 'h3';
 
 import { addComment } from '~~/lib/comments';

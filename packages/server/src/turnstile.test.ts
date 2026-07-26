@@ -191,6 +191,27 @@ describe('verifyTurnstileToken', () => {
       });
     });
 
+    // Evaluated as an argument it would land in the same try as the fetch, and a runtime
+    // without it would be reported as a network error — pointing whoever has to diagnose it
+    // at Cloudflare rather than at the runtime.
+    it('tells a runtime without AbortSignal.timeout apart from a network failure', async () => {
+      const unsupported = new TypeError('AbortSignal.timeout is not a function');
+      const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
+        throw unsupported;
+      });
+
+      try {
+        expect(await verify()).toMatchObject({
+          success: false,
+          reason: 'unavailable',
+          errorCodes: ['mita.runtime_unsupported'],
+          cause: unsupported,
+        });
+      } finally {
+        timeout.mockRestore();
+      }
+    });
+
     it('aborts once the timeout budget is spent', async () => {
       server.use(
         http.post(TURNSTILE_SITEVERIFY_ENDPOINT, async () => {

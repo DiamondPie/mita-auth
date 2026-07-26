@@ -1,4 +1,5 @@
-import { MitaError, createNonce, nonceSchema, type Nonce } from '@mita-auth/core';
+import { MitaError, createNonce, type Nonce } from '@mita-auth/core';
+import { nonceSchema } from '@mita-auth/core/schemas';
 import type { Redis } from '@upstash/redis';
 
 export const DEFAULT_REPLAY_STORE_PREFIX = 'mita';

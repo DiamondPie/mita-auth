@@ -17,8 +17,6 @@
     "@mita-auth/core": "workspace:*",
     "@mita-auth/react": "workspace:*",
     "@mita-auth/server": "workspace:*",
-    "@mita-playground/fake-upstash": "workspace:*",
-    "ky": "^2.0.2",
     "next": "^16.2.12",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

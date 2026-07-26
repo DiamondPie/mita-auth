@@ -2,11 +2,12 @@ import * as z from 'zod';
 
 import { MitaError } from './errors';
 import { MAX_NONCE_BYTES, MIN_NONCE_BYTES } from './nonce';
-
-export const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
-
-/** Compact JWS serialization: three base64url segments. */
-export const COMPACT_JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+import {
+  BASE64URL_PATTERN,
+  COMPACT_JWT_PATTERN,
+  JWK_THUMBPRINT_LENGTH,
+  MAX_DPOP_PROOF_LENGTH,
+} from './patterns';
 
 const base64urlLength = (bytes: number): number => Math.ceil((bytes * 4) / 3);
 
@@ -20,15 +21,14 @@ export const nonceSchema = z
   .max(base64urlLength(MAX_NONCE_BYTES), 'Nonce exceeds the maximum accepted length.')
   .regex(BASE64URL_PATTERN, 'Nonce must be base64url-encoded.');
 
-/** SHA-256 JWK thumbprint (RFC 7638), always 43 base64url characters. */
 export const jwkThumbprintSchema = z
   .string()
-  .length(43, 'A SHA-256 JWK thumbprint is 43 base64url characters.')
+  .length(JWK_THUMBPRINT_LENGTH, 'A SHA-256 JWK thumbprint is 43 base64url characters.')
   .regex(BASE64URL_PATTERN, 'JWK thumbprint must be base64url-encoded.');
 
 export const dpopProofSchema = z
   .string()
-  .max(4096, 'DPoP proof exceeds the maximum accepted length.')
+  .max(MAX_DPOP_PROOF_LENGTH, 'DPoP proof exceeds the maximum accepted length.')
   .regex(COMPACT_JWT_PATTERN, 'DPoP proof must be a compact JWT.');
 
 /** Cloudflare caps Turnstile tokens at 2048 characters. */

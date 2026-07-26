@@ -16,7 +16,7 @@ import {
 import { DPoPVerificationError, MitaError } from './errors';
 import { sha256 } from './internal/webcrypto';
 import { generateNonce, timingSafeEqual } from './nonce';
-import { dpopProofSchema } from './schemas';
+import { COMPACT_JWT_PATTERN, MAX_DPOP_PROOF_LENGTH } from './patterns';
 
 /** RFC 9449 §4.2: every DPoP proof carries this `typ` header. */
 export const DPOP_JWT_TYPE = 'dpop+jwt';
@@ -245,7 +245,11 @@ export async function verifyDPoP(proof: string, options: VerifyDPoPOptions): Pro
     now = Date.now(),
   } = options;
 
-  if (!dpopProofSchema.safeParse(proof).success) {
+  // The equivalent of `dpopProofSchema`, spelled out rather than imported: this module is
+  // the one every browser pulls in through `signDPoP`, and reaching into `schemas.ts` for
+  // one check would put Zod in front of it. The two are kept in step by sharing the
+  // constants they are built from.
+  if (proof.length > MAX_DPOP_PROOF_LENGTH || !COMPACT_JWT_PATTERN.test(proof)) {
     throw new DPoPVerificationError('dpop.malformed', 'DPoP proof is not a compact JWT.');
   }
 
@@ -316,9 +320,13 @@ export async function verifyDPoP(proof: string, options: VerifyDPoPOptions): Pro
   await verifyAth(ath, options.accessToken);
 
   const nonce = readStringClaim(payload, 'nonce');
-  const nonceMismatch = nonce === undefined || !timingSafeEqual(nonce, options.nonce ?? '');
 
-  if (options.nonce !== undefined && nonceMismatch) {
+  // A caller that passed no nonce is not checking for one, so the comparison — and the
+  // empty string it would otherwise have had to compare against — only exists inside here.
+  if (
+    options.nonce !== undefined &&
+    (nonce === undefined || !timingSafeEqual(nonce, options.nonce))
+  ) {
     throw new DPoPVerificationError(
       'dpop.nonce_mismatch',
       'DPoP proof does not echo the expected nonce.',

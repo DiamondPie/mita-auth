@@ -1,4 +1,4 @@
-import { turnstileTokenSchema } from '@mita-auth/core';
+import { turnstileTokenSchema } from '@mita-auth/core/schemas';
 
 export const TURNSTILE_SITEVERIFY_ENDPOINT =
   'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -31,6 +31,7 @@ export const MITA_TURNSTILE_ERROR_CODES = [
   'mita.http_error',
   'mita.malformed_response',
   'mita.network_error',
+  'mita.runtime_unsupported',
 ] as const;
 
 export type KnownTurnstileErrorCode =
@@ -70,6 +71,15 @@ export type TurnstileVerification =
       readonly errorCodes: readonly TurnstileErrorCode[];
       readonly cause?: unknown;
     };
+
+/**
+ * The outcome that says nothing about the visitor.
+ *
+ * Worth a name of its own because it is the one a deployment has to be told about: the 503
+ * it turns into carries no code and no cause, and a fail-closed Turnstile makes it the
+ * difference between "one visitor failed" and "every write is down".
+ */
+export type TurnstileUnavailable = Extract<TurnstileVerification, { reason: 'unavailable' }>;
 
 export interface VerifyTurnstileTokenOptions {
   /** Widget secret key. Never leaves this function. */
@@ -144,6 +154,22 @@ export async function verifyTurnstileToken(
     };
   }
 
+  // Built before the try, not inside it. As an argument it would be evaluated within the
+  // same block, so a runtime without `AbortSignal.timeout` would be reported as a network
+  // error — sending whoever has to diagnose it to Cloudflare's status page instead.
+  let signal: AbortSignal;
+
+  try {
+    signal = AbortSignal.timeout(timeoutMs);
+  } catch (cause) {
+    return {
+      success: false,
+      reason: 'unavailable',
+      errorCodes: ['mita.runtime_unsupported'],
+      cause,
+    };
+  }
+
   let response: Response;
 
   try {
@@ -151,7 +177,7 @@ export async function verifyTurnstileToken(
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: toRequestBody({ secretKey, token, remoteIp, idempotencyKey }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal,
     });
   } catch (cause) {
     return { success: false, reason: 'unavailable', errorCodes: ['mita.network_error'], cause };

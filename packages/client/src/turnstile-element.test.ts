@@ -7,6 +7,7 @@ import {
   resetMitaState,
 } from './state';
 import {
+  MITA_TURNSTILE_EVENTS,
   MITA_TURNSTILE_TAG,
   TURNSTILE_SCRIPT_URL,
   defineMitaTurnstile,
@@ -36,7 +37,7 @@ beforeEach(() => {
   window.turnstile = api;
 
   events = [];
-  for (const type of ['verified', 'expired', 'error']) {
+  for (const type of Object.values(MITA_TURNSTILE_EVENTS)) {
     document.addEventListener(type, collect);
   }
 
@@ -44,7 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const type of ['verified', 'expired', 'error']) {
+  for (const type of Object.values(MITA_TURNSTILE_EVENTS)) {
     document.removeEventListener(type, collect);
   }
 
@@ -124,7 +125,7 @@ describe('<mita-turnstile>', () => {
 
     expect($turnstileToken.get()).toBe('token-1');
     expect($turnstileStatus.get()).toBe('solved');
-    expect(lastEvent().type).toBe('verified');
+    expect(lastEvent().type).toBe(MITA_TURNSTILE_EVENTS.verified);
     expect(lastEvent().detail).toEqual({ token: 'token-1' });
   });
 
@@ -136,7 +137,7 @@ describe('<mita-turnstile>', () => {
 
     expect($turnstileStatus.get()).toBe('expired');
     expect($turnstileToken.get()).toBeNull();
-    expect(lastEvent().type).toBe('expired');
+    expect(lastEvent().type).toBe(MITA_TURNSTILE_EVENTS.expired);
   });
 
   it('passes on the code behind a widget error', async () => {
@@ -146,6 +147,23 @@ describe('<mita-turnstile>', () => {
 
     expect($turnstileStatus.get()).toBe('error');
     expect(lastEvent().detail).toEqual({ code: '110200' });
+  });
+
+  // The event bubbles and is composed, so an unprefixed `error` would reach `window`, where
+  // front-end monitoring listens. A visitor who failed a challenge is not a page error.
+  it('does not report a failed challenge to a page-level error handler', async () => {
+    const onPageError = vi.fn();
+    window.addEventListener('error', onPageError);
+
+    try {
+      await mount();
+      options()['error-callback']?.('110200');
+
+      expect(lastEvent().type).toBe(MITA_TURNSTILE_EVENTS.error);
+      expect(onPageError).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('error', onPageError);
+    }
   });
 
   // The client spends the token the moment it sends one, and the visitor is owed another
@@ -258,6 +276,31 @@ describe('<mita-turnstile>', () => {
     expect(document.head.querySelector('script')?.src).toBe(TURNSTILE_SCRIPT_URL);
     expect($turnstileStatus.get()).toBe('error');
     expect(lastEvent().detail).toEqual({ code: 'script_unavailable' });
+  });
+
+  // A script the page already carried may have finished loading before this element ran, in
+  // which case `load` never fires again. Without a backstop the widget sits at `pending` for
+  // as long as the page lives, with no error anywhere to explain it.
+  it('gives up on a script that reports neither success nor failure', async () => {
+    vi.useFakeTimers();
+    delete window.turnstile;
+
+    try {
+      const script = document.createElement('script');
+      script.src = TURNSTILE_SCRIPT_URL;
+      document.head.append(script);
+
+      const element = document.createElement(MITA_TURNSTILE_TAG);
+      element.setAttribute('site-key', 'site');
+      document.body.append(element);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect($turnstileStatus.get()).toBe('error');
+      expect(lastEvent().detail).toEqual({ code: 'script_unavailable' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a script the browser refuses to fetch', async () => {

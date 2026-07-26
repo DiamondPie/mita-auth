@@ -1,6 +1,7 @@
 import {
   DPOP_AUTH_SCHEME,
   MITA_HEADERS,
+  MitaError,
   SUPPORTED_DPOP_ALGORITHMS,
   isDPoPVerificationError,
   verifyDPoP,
@@ -12,12 +13,17 @@ import type { Duration, RatelimitConfig } from '@upstash/ratelimit';
 
 import {
   createRateLimiter,
+  resolveClientIp,
   type RateLimitDegradation,
   type RateLimitFailureMode,
   type RateLimiter,
 } from './ratelimit';
 import { createReplayStore, type ReplayStore } from './replay';
-import { verifyTurnstileToken, type TurnstileChallenge } from './turnstile';
+import {
+  verifyTurnstileToken,
+  type TurnstileChallenge,
+  type TurnstileUnavailable,
+} from './turnstile';
 
 /** Fail policy for a dependency the guard consults over the network. */
 export type GuardFailureMode = RateLimitFailureMode;
@@ -80,6 +86,17 @@ export interface GuardTurnstileOptions {
   secretKey: string;
   /** Reject requests that carry no token at all. Defaults to true. */
   required?: boolean;
+  /**
+   * Forward the visitor's IP to siteverify as `remoteip`, which Cloudflare uses to sharpen
+   * its verdict. `true` reads it with {@link resolveClientIp}; a function derives it some
+   * other way.
+   *
+   * Off by default, and deliberately: the headers `resolveClientIp` reads are client-supplied
+   * unless a trusted proxy overwrites them. Behind Cloudflare or Vercel that is guaranteed
+   * and this is worth turning on; on a bare Node server it would hand Cloudflare a value the
+   * visitor chose, and a wrong IP makes the scoring worse rather than better.
+   */
+  remoteIp?: boolean | ((request: Request) => string | null | undefined);
   allowedHostnames?: readonly string[];
   expectedAction?: string;
   maxAgeSeconds?: number;
@@ -91,6 +108,14 @@ export interface GuardTurnstileOptions {
    * degradation.
    */
   failureMode?: GuardFailureMode;
+  /**
+   * Called when siteverify reached no verdict, with the codes and cause behind it.
+   *
+   * Without this the only signal is a 503 whose body says `turnstile_unavailable`, and the
+   * reasons are worlds apart: a Cloudflare outage, a runtime with no `AbortSignal.timeout`,
+   * and a response that was not JSON all arrive looking identical.
+   */
+  onUnavailable?: (verification: TurnstileUnavailable) => void;
 }
 
 export interface GuardDPoPOptions {
@@ -113,8 +138,18 @@ export interface CreateSecurityGuardOptions {
    *
    * Any of the platform entry points will do — the `Redis` classes exported by
    * `@upstash/redis`, `/cloudflare` and `/fastly` are structurally identical.
+   *
+   * Optional only because {@link rateLimiter} and {@link replayStore} can be supplied
+   * ready-made; whichever of the two is left to be built needs this.
    */
-  redis: Redis | { url: string; token: string };
+  redis?: Redis | { url: string; token: string };
+  /**
+   * A limiter to use instead of building a Redis-backed one, which makes {@link rateLimit}
+   * moot. `@mita-auth/server/memory` has one for local development.
+   */
+  rateLimiter?: RateLimiter;
+  /** A replay store to use instead of building a Redis-backed one. Same as above. */
+  replayStore?: ReplayStore;
   rateLimit?: GuardRateLimitOptions;
   /** Enables Turnstile verification. Omit to skip it. */
   turnstile?: GuardTurnstileOptions;
@@ -154,26 +189,36 @@ export interface SecurityGuard {
 export function createSecurityGuard(options: CreateSecurityGuardOptions): SecurityGuard {
   const { rateLimit = {}, turnstile, dpop, resolveUrl = (request) => request.url, now } = options;
 
-  // Told apart by shape rather than by `instanceof`. `@upstash/redis` publishes a separate
-  // subclass per platform entry point — `/cloudflare` and `/fastly` alongside the default
-  // Node one — and they share a base class but not an identity. An identity check would
-  // reject precisely the entry points those runtimes are meant to use, and would then
-  // quietly build a second client with no URL at all.
-  const redis = 'url' in options.redis ? new Redis(options.redis) : options.redis;
+  const client = resolveRedis(options.redis);
+
+  /** Refused here rather than at the first request, where it would read as an outage. */
+  const requireRedis = (missing: string): Redis => {
+    if (client === undefined) {
+      throw new MitaError(
+        'guard.redis_required',
+        `A guard needs \`redis\` unless a ${missing} is supplied ready-made. \`@mita-auth/server/memory\` has in-process stores for local development.`,
+      );
+    }
+
+    return client;
+  };
 
   const dpopOptions: GuardDPoPOptions | undefined = dpop === true ? {} : dpop;
 
-  const rateLimiter = createRateLimiter({ redis, ...rateLimit });
-  const replayStore = createReplayStore({
-    redis,
-    ...(dpopOptions?.prefix === undefined ? {} : { prefix: dpopOptions.prefix }),
-    ...(dpopOptions?.nonceTtlMs === undefined ? {} : { nonceTtlMs: dpopOptions.nonceTtlMs }),
-    ...(dpopOptions?.timeoutMs === undefined ? {} : { timeoutMs: dpopOptions.timeoutMs }),
-    ...(dpopOptions?.onUnavailable === undefined
-      ? {}
-      : { onUnavailable: dpopOptions.onUnavailable }),
-    proofTtlMs: proofLifetimeMs(dpopOptions),
-  });
+  const rateLimiter =
+    options.rateLimiter ?? createRateLimiter({ redis: requireRedis('rateLimiter'), ...rateLimit });
+  const replayStore =
+    options.replayStore ??
+    createReplayStore({
+      redis: requireRedis('replayStore'),
+      ...(dpopOptions?.prefix === undefined ? {} : { prefix: dpopOptions.prefix }),
+      ...(dpopOptions?.nonceTtlMs === undefined ? {} : { nonceTtlMs: dpopOptions.nonceTtlMs }),
+      ...(dpopOptions?.timeoutMs === undefined ? {} : { timeoutMs: dpopOptions.timeoutMs }),
+      ...(dpopOptions?.onUnavailable === undefined
+        ? {}
+        : { onUnavailable: dpopOptions.onUnavailable }),
+      proofTtlMs: proofLifetimeMs(dpopOptions),
+    });
 
   const algorithms = dpopOptions?.algorithms ?? SUPPORTED_DPOP_ALGORITHMS;
 
@@ -193,7 +238,7 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
             )
           : failure(
               'rate_limited',
-              rateLimitedResponse(decision.limit, decision.reset),
+              rateLimitedResponse(decision.limit, decision.reset, now?.() ?? Date.now()),
               decision.pending,
             );
       }
@@ -221,7 +266,13 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
         return dpopOutcome.failure;
       }
 
-      const turnstileOutcome = await runTurnstile(token, turnstile, now?.(), decision.pending);
+      const turnstileOutcome = await runTurnstile(
+        request,
+        token,
+        turnstile,
+        now?.(),
+        decision.pending,
+      );
 
       if (turnstileOutcome.failure !== null) {
         return turnstileOutcome.failure;
@@ -396,6 +447,7 @@ async function runDPoP({
  * having been rejected before any of the expensive checks ran.
  */
 async function runTurnstile(
+  request: Request,
   token: string | null,
   options: GuardTurnstileOptions | undefined,
   now: number | undefined,
@@ -405,9 +457,12 @@ async function runTurnstile(
     return { failure: null };
   }
 
+  const remoteIp = resolveRemoteIp(request, options.remoteIp);
+
   const result = await verifyTurnstileToken({
     secretKey: options.secretKey,
     token,
+    ...(remoteIp === null ? {} : { remoteIp }),
     ...(options.allowedHostnames === undefined
       ? {}
       : { allowedHostnames: options.allowedHostnames }),
@@ -428,6 +483,10 @@ async function runTurnstile(
     };
   }
 
+  // Everything that made this unknowable is in `result`, and the 503 below carries none of
+  // it. Handing it over here is the only place a deployment can learn the difference.
+  options.onUnavailable?.(result);
+
   return (options.failureMode ?? 'closed') === 'open'
     ? { failure: null }
     : {
@@ -437,6 +496,37 @@ async function runTurnstile(
           pending,
         ),
       };
+}
+
+/** `null` when nothing usable was found, which leaves `remoteip` off the request entirely. */
+function resolveRemoteIp(
+  request: Request,
+  remoteIp: GuardTurnstileOptions['remoteIp'],
+): string | null {
+  if (remoteIp === undefined || remoteIp === false) {
+    return null;
+  }
+
+  const resolved = remoteIp === true ? resolveClientIp(request) : remoteIp(request);
+
+  return resolved === null || resolved === undefined || resolved === '' ? null : resolved;
+}
+
+/**
+ * Builds the Upstash client, or takes the one it was handed.
+ *
+ * Told apart by shape rather than by `instanceof`: `@upstash/redis` publishes a separate
+ * subclass per platform entry point — `/cloudflare` and `/fastly` alongside the default Node
+ * one — and they share a base class but not an identity. An identity check would reject
+ * precisely the entry points those runtimes are meant to use, and would then quietly build a
+ * second client with no URL at all.
+ */
+function resolveRedis(redis: CreateSecurityGuardOptions['redis']): Redis | undefined {
+  if (redis === undefined) {
+    return undefined;
+  }
+
+  return 'url' in redis ? new Redis(redis) : redis;
 }
 
 /** Keeps a spent `jti` on record for at least as long as a proof stays acceptable. */
@@ -498,8 +588,8 @@ async function challengeFailure(
   return failure(reason, problemResponse(401, reason, headers), pending);
 }
 
-function rateLimitedResponse(limit: number, reset: number): Response {
-  const retryAfterSeconds = Math.max(0, Math.ceil((reset - Date.now()) / 1000));
+function rateLimitedResponse(limit: number, reset: number, now: number): Response {
+  const retryAfterSeconds = Math.max(0, Math.ceil((reset - now) / 1000));
 
   return problemResponse(
     429,

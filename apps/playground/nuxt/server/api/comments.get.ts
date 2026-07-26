@@ -1,6 +1,6 @@
 import { listComments } from '~~/lib/comments';
-import { redisBackend } from '~~/lib/guard';
+import { storeBackend } from '~~/lib/guard';
 
 export default defineEventHandler(() =>
-  Response.json({ comments: listComments(), backend: redisBackend }),
+  Response.json({ comments: listComments(), backend: storeBackend }),
 );

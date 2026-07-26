@@ -9,7 +9,7 @@ Vue 3 bindings for [Mita](https://github.com/DiamondPie/mita-auth): four composa
 ## Install
 
 ```bash
-pnpm add @mita-auth/vue @mita-auth/client ky
+pnpm add @mita-auth/vue @mita-auth/client
 ```
 
 Peer: `vue@^3.3.1` — the floor comes from `@nanostores/vue`, which needs the effect-scope

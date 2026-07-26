@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { generateNonce } from './nonce';
+import { COMPACT_JWT_PATTERN, MAX_DPOP_PROOF_LENGTH } from './patterns';
 import {
   commentSchema,
   createCommentSchema,
@@ -64,6 +65,22 @@ describe('dpopProofSchema', () => {
 
   it('caps the accepted length', () => {
     expect(dpopProofSchema.safeParse(`a.b.${'c'.repeat(4096)}`).success).toBe(false);
+  });
+
+  // `verifyDPoP` cannot use this schema: importing it would put Zod in front of every
+  // browser that only signs. It applies the same two constants by hand instead, so a rule
+  // added here that is not one of them would leave the two checks quietly disagreeing.
+  it.each([
+    compactJwt,
+    'header.payload',
+    'a.b.c.d',
+    '',
+    'a+b.c.d',
+    `a.b.${'c'.repeat(MAX_DPOP_PROOF_LENGTH)}`,
+  ])('says about %j exactly what the shared constants say', (proof) => {
+    const byHand = proof.length <= MAX_DPOP_PROOF_LENGTH && COMPACT_JWT_PATTERN.test(proof);
+
+    expect(dpopProofSchema.safeParse(proof).success).toBe(byHand);
   });
 });
 

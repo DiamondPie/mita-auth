@@ -22,9 +22,9 @@ pnpm add @mita-auth/core
 | --- | --- |
 | DPoP | `generateDPoPKeyPair`, `importDPoPKeyPair`, `exportDPoPKeyPair`, `signDPoP`, `verifyDPoP`, `calculateJkt` |
 | Nonces | `generateNonce`, `createNonce`, `isNonceExpired`, `timingSafeEqual` |
-| Wire format | `MITA_HEADERS`, `DPOP_AUTH_SCHEME` |
-| Schemas | `commentSchema`, `createCommentSchema`, `securityEnvelopeSchema`, `nonceSchema`, … |
+| Wire format | `MITA_HEADERS`, `DPOP_AUTH_SCHEME`, `COMPACT_JWT_PATTERN`, … |
 | Errors | `MitaError`, `DPoPVerificationError`, `isMitaError`, `isDPoPVerificationError` |
+| Schemas (`/schemas`) | `commentSchema`, `createCommentSchema`, `securityEnvelopeSchema`, `nonceSchema`, … |
 
 ## Usage
 
@@ -47,8 +47,18 @@ const { jti, jkt } = await verifyDPoP(proof, {
 });
 ```
 
+The Zod schemas live behind their own entry point:
+
+```ts
+import { commentSchema } from '@mita-auth/core/schemas';
+```
+
 ## Notes
 
+- **Zod is not in the main entry, deliberately.** The package is bundled one file per entry,
+  so tree-shaking inside it degrades to statement level and a single re-export would put
+  ~16 kB gzip in front of every browser that only signs proofs. Ask for `/schemas` when you
+  want the validation, and it costs nothing when you do not.
 - **Zero I/O by design.** `verifyDPoP` cannot detect a replay on its own: record the `jti`
   it returns for the proof's acceptance window. `@mita-auth/server` does that with Upstash
   Redis.

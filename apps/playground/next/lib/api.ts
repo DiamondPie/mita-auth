@@ -1,5 +1,4 @@
-import { createProtectedClient } from '@mita-auth/client';
-import type { KyInstance } from 'ky';
+import { createProtectedClient, type KyInstance } from '@mita-auth/client';
 
 let client: KyInstance | undefined;
 

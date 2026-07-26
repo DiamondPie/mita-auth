@@ -1,4 +1,4 @@
-import { isHTTPError } from 'ky';
+import { isHTTPError } from '@mita-auth/client';
 
 /** The guard's own rejection reasons, plus this app's one validation failure. */
 const MESSAGES: Record<string, string> = {

@@ -2,6 +2,7 @@
 
 import { createElement, useEffect, useState, type ReactElement } from 'react';
 import {
+  MITA_TURNSTILE_EVENTS,
   MITA_TURNSTILE_TAG,
   type MitaTurnstileElement,
   type TurnstileRenderOptions,
@@ -51,14 +52,14 @@ export function MitaTurnstile(props: MitaTurnstileProps): ReactElement {
       onError?.((event as CustomEvent<{ code: string }>).detail.code);
     };
 
-    element.addEventListener('verified', handleVerified);
-    element.addEventListener('expired', handleExpired);
-    element.addEventListener('error', handleError);
+    element.addEventListener(MITA_TURNSTILE_EVENTS.verified, handleVerified);
+    element.addEventListener(MITA_TURNSTILE_EVENTS.expired, handleExpired);
+    element.addEventListener(MITA_TURNSTILE_EVENTS.error, handleError);
 
     return () => {
-      element.removeEventListener('verified', handleVerified);
-      element.removeEventListener('expired', handleExpired);
-      element.removeEventListener('error', handleError);
+      element.removeEventListener(MITA_TURNSTILE_EVENTS.verified, handleVerified);
+      element.removeEventListener(MITA_TURNSTILE_EVENTS.expired, handleExpired);
+      element.removeEventListener(MITA_TURNSTILE_EVENTS.error, handleError);
     };
   }, [element, onVerified, onExpired, onError]);
 

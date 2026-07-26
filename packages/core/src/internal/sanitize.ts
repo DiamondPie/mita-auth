@@ -1,9 +1,16 @@
 /**
- * Sanitization rules as pure data.
+ * Sanitization rules as pure data, reserved for a rich-text path that does not exist yet.
  *
- * `@mita-auth/core` never imports DOMPurify — the rules live here so that client and server
- * agree on one allowlist, while the actual DOM traversal stays in `@mita-auth/server`, which
- * spreads a profile straight into `DOMPurify.sanitize(html, { ...profile })`.
+ * **Nothing consumes these.** `@mita-auth/server` sanitizes by escaping — `escapeHtml` turns
+ * markup into text and never parses it — so no allowlist is consulted anywhere today. The
+ * profiles are shaped for DOMPurify's option object, to be spread into
+ * `DOMPurify.sanitize(html, { ...profile })` by a future Node-only subpath export; the
+ * DOMPurify + linkedom combination that would have backed it on Edge was removed in Phase 2
+ * after it turned out to silently pass every XSS case through.
+ *
+ * They stay internal until that lands. Publishing them would put five symbols with no
+ * implementation behind them into the package's semver surface, where the first real
+ * consumer could only adjust them by way of a breaking change.
  */
 export interface SanitizeProfile {
   readonly ALLOWED_TAGS: readonly string[];
@@ -23,8 +30,9 @@ export interface SanitizeProfile {
 export const SAFE_URI_PATTERN = /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i;
 
 /**
- * `rel` value `@mita-auth/server` forces onto every surviving anchor: `noopener`/`noreferrer`
- * close the `window.opener` hijack, `nofollow`/`ugc` mark user-submitted links for crawlers.
+ * `rel` value to force onto every surviving anchor once anchors survive anything:
+ * `noopener`/`noreferrer` close the `window.opener` hijack, `nofollow`/`ugc` mark
+ * user-submitted links for crawlers.
  */
 export const SAFE_LINK_REL = 'noopener noreferrer nofollow ugc';
 

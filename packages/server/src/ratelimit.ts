@@ -155,7 +155,13 @@ export function createRateLimiter(options: CreateRateLimiterOptions): RateLimite
 
   return {
     async limit(request) {
-      const identifierUsed = identifier(request) ?? UNIDENTIFIED_RATE_LIMIT_KEY;
+      const candidate = identifier(request);
+      // Not `??`: an identifier that returned `''` would otherwise build a key ending in a
+      // colon, collecting every anonymous caller in one bucket that nothing documents.
+      const identifierUsed =
+        candidate === null || candidate === undefined || candidate === ''
+          ? UNIDENTIFIED_RATE_LIMIT_KEY
+          : candidate;
 
       try {
         const result = await ratelimit.limit(identifierUsed);
