@@ -1,10 +1,12 @@
 name: CI
 
+# Development happens on `feat/*` and `fix/*` branches that merge into `dev`; `main` only
+# receives releases. Watching `main` alone would leave every real merge unchecked.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
