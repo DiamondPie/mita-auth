@@ -45,6 +45,11 @@ import '@mita-auth/client/turnstile';
 <mita-turnstile site-key="0x4AAA..."></mita-turnstile>
 ```
 
+It dispatches `mita-verified`, `mita-expired` and `mita-error` — the names are also on
+`MITA_TURNSTILE_EVENTS`. They are prefixed because the events bubble and are composed: a
+plain `error` would reach `window`, where front-end monitoring listens, and a visitor who
+simply failed a challenge would be filed as a page error.
+
 ## State
 
 `$sessionStatus`, `$isAuthenticated`, `$turnstileStatus` and `$turnstileToken` are nanostores

@@ -5,9 +5,9 @@ import { MITA_TURNSTILE_TAG, type TurnstileRenderOptions } from '@mita-auth/clie
  * Renders `<mita-turnstile>` and re-emits its events.
  *
  * Vue's own patching does all the work here: `site-key`/`theme`/`size` are not properties
- * of the element, so they go through `setAttribute`, and `onVerified`/`onExpired`/`onError`
- * hyphenate down to the event names the element dispatches. No manual `addEventListener`,
- * unlike the React wrapper.
+ * of the element, so they go through `setAttribute`, and the `on*` keys hyphenate down to
+ * the event names the element dispatches. No manual `addEventListener`, unlike the React
+ * wrapper.
  *
  * A render function rather than a template also means the tag never reaches Vue's template
  * compiler — which is why this package needs no `compilerOptions.isCustomElement`. A host
@@ -39,13 +39,17 @@ export const MitaTurnstile = defineComponent({
         'site-key': props.siteKey,
         theme: props.theme,
         size: props.size,
-        onVerified: (event: Event) => {
+        // Vue hyphenates an `on*` key down to the DOM event name, so these three land on
+        // `mita-verified` / `mita-expired` / `mita-error`. The component's own emits keep
+        // the short names — the prefix exists to keep the element's `error` off `window`,
+        // which is not a concern once Vue is the one routing it.
+        onMitaVerified: (event: Event) => {
           emit('verified', (event as CustomEvent<{ token: string }>).detail.token);
         },
-        onExpired: () => {
+        onMitaExpired: () => {
           emit('expired');
         },
-        onError: (event: Event) => {
+        onMitaError: (event: Event) => {
           emit('error', (event as CustomEvent<{ code: string }>).detail.code);
         },
       });

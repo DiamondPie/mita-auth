@@ -11,6 +11,20 @@ import {
 
 export const MITA_TURNSTILE_TAG = 'mita-turnstile';
 
+/**
+ * Names the element dispatches under, all prefixed.
+ *
+ * `error` on its own would have been the costly one: the event bubbles and is composed, so
+ * it reaches `window`, where front-end monitoring almost universally listens — a visitor who
+ * simply failed a challenge would be reported as a page error. The other two are prefixed
+ * for the sake of one consistent set rather than because anything collides with them.
+ */
+export const MITA_TURNSTILE_EVENTS = {
+  verified: 'mita-verified',
+  expired: 'mita-expired',
+  error: 'mita-error',
+} as const;
+
 export const TURNSTILE_SCRIPT_URL =
   'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
@@ -148,11 +162,11 @@ export class MitaTurnstileElement extends ElementBase {
       ...(size === null ? {} : { size: size as NonNullable<TurnstileRenderOptions['size']> }),
       callback: (token) => {
         setTurnstileToken(token);
-        this.#emit('verified', { token });
+        this.#emit(MITA_TURNSTILE_EVENTS.verified, { token });
       },
       'expired-callback': () => {
         expireTurnstileToken();
-        this.#emit('expired', null);
+        this.#emit(MITA_TURNSTILE_EVENTS.expired, null);
       },
       'error-callback': (code) => {
         this.#fail(code ?? 'unknown');
@@ -180,7 +194,7 @@ export class MitaTurnstileElement extends ElementBase {
 
   #fail(code: string): void {
     markTurnstileError();
-    this.#emit('error', { code });
+    this.#emit(MITA_TURNSTILE_EVENTS.error, { code });
   }
 
   #emit<TDetail>(type: string, detail: TDetail): void {
