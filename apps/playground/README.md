@@ -9,9 +9,8 @@ check that what is left is framework idiom rather than SDK plumbing. The
 
 ```text
 apps/playground/
-├── fake-upstash/   # in-memory stand-in for Upstash Redis, so both demos run offline
-├── next/           # Next.js App Router · @mita-auth/react
-└── nuxt/           # Nuxt · @mita-auth/vue
+├── next/   # Next.js App Router · @mita-auth/react
+└── nuxt/   # Nuxt · @mita-auth/vue
 ```
 
 ## Running them
@@ -44,25 +43,22 @@ be told when the Next demo already holds 3000.
 Both are worth running. The dev server and the production bundle are not the same program,
 and Phase 4 found a defect that only existed in one of them (see [what this caught](#what-this-caught)).
 
-## Redis, and why the badge matters
+## The store, and why the badge matters
 
-`createSecurityGuard` needs Upstash Redis for rate limiting and for nonce/`jti` replay
-protection. Out of the box the demos use [`fake-upstash`](./fake-upstash), which implements
-the handful of commands the guard issues — including a hand translation of
-`@upstash/ratelimit`'s sliding-window Lua script — as an `@upstash/redis` `Requester` held in
-the server process's memory. No extra service, no extra port, works offline.
+`createSecurityGuard` needs somewhere to keep rate-limit counters and spent nonces. Both
+demos use `@mita-auth/server/memory`, which holds both in the server process — no extra
+service, no extra port, works offline.
 
-Set both of these to use the real thing instead:
+That is the published package, not a fixture private to this repository. It is what a
+project gets from `pnpm add`, which is the point: the demos are only as easy to start as
+Mita itself is.
 
-```bash
-UPSTASH_REDIS_REST_URL=...
-UPSTASH_REDIS_REST_TOKEN=...
-```
+`lib/guard.ts` shows the two lines a real deployment swaps in to point at Upstash instead.
 
-The page shows which one is in play (`redis in-memory` / `redis upstash`), because a rate
-limiting result means different things in each case. Everything recorded under
-[the four scenarios](#the-four-scenarios) was observed against the in-memory store; the real
-one is left for Phase 5, which needs live env anyway.
+The page carries the badge because it qualifies every result: nothing in an in-memory store
+outlives a restart, and a second instance would count its own requests. Everything recorded
+under [the four scenarios](#the-four-scenarios) was observed against it; a run against real
+Upstash is left for Phase 5, which needs live credentials anyway.
 
 ## Turnstile keys
 

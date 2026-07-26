@@ -73,7 +73,7 @@ export function CommentSection() {
           turnstile <strong>{turnstileStatus}</strong>
         </span>
         <span className="badge">
-          redis <strong>{backend}</strong>
+          store <strong>{backend}</strong>
         </span>
       </div>
 

@@ -2,13 +2,13 @@ import { commentSchema } from '@mita-auth/core/schemas';
 import { after } from 'next/server';
 
 import { addComment, listComments } from '@/lib/comments';
-import { guard, redisBackend } from '@/lib/guard';
+import { guard, storeBackend } from '@/lib/guard';
 
 /** The list lives in memory and changes per request, so nothing here may be prerendered. */
 export const dynamic = 'force-dynamic';
 
 export function GET(): Response {
-  return Response.json({ comments: listComments(), backend: redisBackend });
+  return Response.json({ comments: listComments(), backend: storeBackend });
 }
 
 export async function POST(request: Request): Promise<Response> {

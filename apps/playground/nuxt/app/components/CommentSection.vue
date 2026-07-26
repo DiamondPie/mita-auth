@@ -69,7 +69,7 @@ const submit = async () => {
       turnstile <strong>{{ turnstileStatus }}</strong>
     </span>
     <span class="badge">
-      redis <strong>{{ backend }}</strong>
+      store <strong>{{ backend }}</strong>
     </span>
   </div>
 

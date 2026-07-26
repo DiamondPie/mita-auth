@@ -18,7 +18,6 @@
     "@mita-auth/core": "workspace:*",
     "@mita-auth/server": "workspace:*",
     "@mita-auth/vue": "workspace:*",
-    "@mita-playground/fake-upstash": "workspace:*",
     "h3": "^1.15.11",
     "nuxt": "^4.5.0",
     "vue": "^3.5.40"
