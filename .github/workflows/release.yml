@@ -32,6 +32,11 @@ jobs:
       # which nothing here publishes and whose failure would block a release.
       - run: pnpm turbo run build --filter="./packages/*"
 
+      # CI runs on `push: main` too, but as a separate workflow it cannot block this one:
+      # merging the version PR would publish even with CI red. Re-running the package
+      # checks here is what actually gates the publish.
+      - run: pnpm turbo run typecheck test check:exports --filter="./packages/*"
+
       - name: Create release PR or publish
         uses: changesets/action@v1
         with:
