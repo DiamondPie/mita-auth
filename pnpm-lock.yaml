@@ -51,6 +51,16 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(jsdom@29.1.1)(msw@2.15.0(@types/node@22.20.1)(typescript@6.0.3))(vite@8.1.5(@types/node@22.20.1))
 
+  apps/playground/fake-upstash:
+    dependencies:
+      '@upstash/redis':
+        specifier: ^1.38.0
+        version: 1.38.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.1
+        version: 22.20.1
+
   packages/client:
     dependencies:
       '@mita-auth/core':
