@@ -13,9 +13,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      // Re-exports only. v8 attributes no statements to either, so they report a flat 0%
-      // that reads as a gap while there is nothing in them that could be covered.
-      exclude: ['src/index.ts', 'src/ky.ts'],
+      // Re-exports only. v8 attributes no statements to any of them, so they report a flat
+      // 0% that reads as a gap while there is nothing in them that could be covered.
+      exclude: ['src/index.ts', 'src/errors.ts', 'src/ky.ts'],
       reporter: ['text', 'html'],
       thresholds: {
         lines: 90,
