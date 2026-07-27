@@ -172,6 +172,25 @@ describe('createProtectedClient', () => {
     expect(attempts[0]?.proof).not.toBe('');
   });
 
+  // ky lets a single call override `fetch`, and before the saturation check moved the
+  // binding into the init hook that override silently replaced the signing path outright.
+  it('signs through a fetch supplied for one call', async () => {
+    server.use(queue(() => accepted('nonce-1')));
+    const sent = vi.fn();
+
+    await client()
+      .post(API_URL, {
+        fetch: async (input, init) => {
+          sent();
+          return globalThis.fetch(input, init);
+        },
+      })
+      .json();
+
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(attempts[0]?.proof).not.toBe('');
+  });
+
   describe('dpop proofs', () => {
     it('binds a proof to the request it is sent with', async () => {
       server.use(queue(() => accepted('nonce-1')));
@@ -355,6 +374,21 @@ describe('createProtectedClient', () => {
       await Promise.allSettled([api.post(API_URL), api.post(API_URL)]);
 
       await expect(api.post(API_URL)).resolves.toMatchObject({ status: 200 });
+    });
+
+    // `timeout` is a per-call option. Weighing the queue against the instance's value would
+    // refuse a call that had asked for — and had — sixty seconds to finish in.
+    it('weighs a call against the timeout that call actually asked for', async () => {
+      const api = client({ timeout: SATURATED_TIMEOUT_MS, fetch: slowNetwork() });
+
+      await api.post(API_URL);
+
+      const responses = await Promise.all([
+        api.post(API_URL, { timeout: 60_000 }),
+        api.post(API_URL, { timeout: 60_000 }),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
     });
 
     it('predicts nothing when there is no timeout to run out of', async () => {

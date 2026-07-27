@@ -101,12 +101,6 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
     );
   }
 
-  // ky arms its per-attempt timer before it calls the `fetch` option, so the wait in the queue
-  // below is charged to the same budget as the round trip itself. `timeout: false` turns that
-  // timer off, and with it the whole concern.
-  const timeoutBudget =
-    kyOptions.timeout === false ? undefined : (kyOptions.timeout ?? DEFAULT_KY_TIMEOUT);
-
   let pendingKeyPair: Promise<DPoPKeyPair> | undefined;
   let nonce: string | undefined;
 
@@ -160,21 +154,26 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
    * a burst deep enough to outlast `timeout` would have its tail rejected as timed out —
    * without a status code, without `onUnauthorized`, and without ever reaching the server.
    * Attempts that can be seen to be in that position up front are refused instead.
+   *
+   * `budget` and `send` are bound per call by the init hook rather than read from the
+   * instance: both are options ky lets a single call override, and this runs on behalf of
+   * whichever call reached the front.
    */
-  const attempt = (request: Request, init?: RequestInit): Promise<Response> => {
+  const attempt = (
+    request: Request,
+    init: RequestInit | undefined,
+    budget: number | undefined,
+    send: NonNullable<Options['fetch']>,
+  ): Promise<Response> => {
     // Only armed once a round trip has been observed; a lone request cannot queue behind
     // anything, so there is nothing to predict before the first one comes back.
-    if (
-      timeoutBudget !== undefined &&
-      lastRtt !== undefined &&
-      (queueDepth + 1) * lastRtt > timeoutBudget
-    ) {
+    if (budget !== undefined && lastRtt !== undefined && (queueDepth + 1) * lastRtt > budget) {
       // Refused before joining the queue, so it does not deepen the saturation it reports.
       // Rejecting rather than throwing also lets ky clear the timer it armed for this attempt.
       return Promise.reject(
         new MitaError(
           'client.queue_saturated',
-          `This client already has ${queueDepth} request(s) queued at about ${lastRtt} ms each, which leaves no room for another inside the ${timeoutBudget} ms timeout. Requests on one instance are sent one at a time and share that budget, so raise \`timeout\`, send fewer at once, or split the burst across separate clients.`,
+          `This client already has ${queueDepth} request(s) queued at about ${lastRtt} ms each, which leaves no room for another inside the ${budget} ms timeout. Requests on one instance are sent one at a time and share that budget, so raise \`timeout\`, send fewer at once, or split the burst across separate clients.`,
         ),
       );
     }
@@ -190,7 +189,7 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
       );
 
       const sentAt = Date.now();
-      const response = await baseFetch(request, init);
+      const response = await send(request, init);
 
       lastRtt = Date.now() - sentAt;
 
@@ -233,10 +232,6 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
 
   return ky.create({
     ...kyOptions,
-    // ky hands its `fetch` a `Request` on every attempt; the option's wider signature is the
-    // Fetch API's, not ky's. Narrowing it keeps the signing path free of a branch that ky
-    // cannot take, and a drift would fail every request rather than hide.
-    fetch: attempt as NonNullable<Options['fetch']>,
     hooks: {
       ...hooks,
       init: [
@@ -247,6 +242,20 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
           // but only gets copied per call when an init hook exists, which is this one.
           callOptions.context = { ...callOptions.context };
           handshakes.set(callOptions.context, { retries: 0 });
+
+          // Binding `fetch` here rather than in the instance options is what lets a single
+          // call's `timeout` and `fetch` be honoured: this hook runs after ky has merged
+          // them and before it constructs anything from them. Reading `timeout` off the
+          // instance instead would refuse bursts that a call raising its own budget had
+          // every chance of finishing.
+          const budget =
+            callOptions.timeout === false ? undefined : (callOptions.timeout ?? DEFAULT_KY_TIMEOUT);
+          const send = callOptions.fetch ?? baseFetch;
+
+          // ky hands its `fetch` a `Request` on every attempt; the option's wider signature
+          // is the Fetch API's, not ky's. Narrowing it keeps the signing path free of a
+          // branch ky cannot take, and a drift would fail every request rather than hide.
+          callOptions.fetch = (request, init) => attempt(request as Request, init, budget, send);
         },
       ],
       beforeRequest: [

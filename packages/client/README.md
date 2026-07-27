@@ -67,7 +67,8 @@ people should reach**.
 - **Reading a failure needs no second package.** `createProtectedClient` returns a ky
   instance and ky reports a refusal by throwing, so `isHTTPError`, `isNetworkError`,
   `isTimeoutError` and `KyInstance` are re-exported from here. Anything past that is ky's
-  own API — import `ky` directly for it.
+  own API — import `ky` directly for it. `MitaError` and `isMitaError` come across for the
+  same reason: a refusal Mita made on its own has no response to inspect, only a `code`.
 - **The first request to a server is answered with a 401.** RFC 9449 defines that rejection
   as the nonce handshake; the client resolves it and retries on its own, which costs one
   extra round trip and one extra rate-limit token per cold start. Size your rate limits with
@@ -80,9 +81,10 @@ people should reach**.
   per-attempt timer before an attempt reaches the queue, so waiting in line is charged
   against the same `timeout` as the round trip. With ky's 10 s default, the `⌊10000 / RTT⌋`th
   concurrent call is where that budget runs out. Raise `timeout` in proportion to how deep
-  your bursts get, or give independent bursts their own client. An attempt that can be seen
-  up front not to fit is rejected with a `MitaError` whose code is `client.queue_saturated`,
-  rather than being sent and reported as a timeout it never had a chance to beat.
+  your bursts get — per call or for the whole instance, both are honoured — or give
+  independent bursts their own client. An attempt that can be seen up front not to fit is
+  rejected with a `MitaError` whose code is `client.queue_saturated`, rather than being sent
+  and reported as a timeout it never had a chance to beat.
 - **One Turnstile token per submission.** Sending it spends it; the widget watches for that
   and asks the visitor's browser for a fresh challenge without being told. This happens when
   the request goes out, not when it succeeds, so a rejection the server made *before*
