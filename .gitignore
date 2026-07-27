@@ -107,6 +107,9 @@ worker-configuration.d.ts
 .next
 out
 
+# Vercel CLI project link (carries the project and org ids)
+.vercel
+
 # Nuxt.js build / generate output
 .nuxt
 dist
