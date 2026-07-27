@@ -94,6 +94,8 @@ web_modules/
 .dev.vars
 .dev.vars.*
 .wrangler
+# Written by `wrangler check startup`
+*.cpuprofile
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
