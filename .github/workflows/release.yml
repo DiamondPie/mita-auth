@@ -38,7 +38,15 @@ jobs:
       # CI runs on `push: main` too, but as a separate workflow it cannot block this one:
       # merging the version PR would publish even with CI red. Re-running the package
       # checks here is what actually gates the publish.
-      - run: pnpm turbo run typecheck test check:exports --filter="./packages/*"
+      #
+      # What belongs on that gate is decided by subject, not by cost: these four judge the
+      # artefact itself — publint its manifest and what `files` really ships, attw how its
+      # types resolve — and publint in particular catches the kind of defect that surfaces
+      # nowhere else, because nothing but a publish ever reads those fields. The react-18,
+      # vue-3-3, server-edge and playground jobs judge a host environment instead; a red
+      # one of those is a compatibility bug, not an unpublishable package, and direct
+      # pushes to `main` are what branch protection is for.
+      - run: pnpm turbo run typecheck test check:exports lint:publish --filter="./packages/*"
 
       - name: Create release PR or publish
         uses: changesets/action@v1
