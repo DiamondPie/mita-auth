@@ -3,7 +3,7 @@
 **一套开箱即用、框架无关（Framework-agnostic）的鉴权与反爬（Anti-abuse）防护 SDK。**
 一次编写核心逻辑，同时适配 Next.js / Nuxt / React / Vue / 原生 JS，供个人主页与后续所有项目复用。
 
-> 状态：🚧 开发中 — 五个包（`@mita-auth/core`、`@mita-auth/server`、`@mita-auth/client`、`@mita-auth/react`、`@mita-auth/vue`）均已完成，[Next.js + Nuxt playground](./apps/playground) 已验证「零框架适配代码」的承诺：两个 demo 共用六个逐字节相同的业务模块，SDK 触碰面仅 4 处差异且全部是框架惯例。接下来是 Edge / Cloudflare Workers 兼容性；尚未发布到 npm。
+> 状态：🚧 开发中 — 五个包（`@mita-auth/core`、`@mita-auth/server`、`@mita-auth/client`、`@mita-auth/react`、`@mita-auth/vue`）均已完成，[Next.js + Nuxt playground](./apps/playground) 已验证「零框架适配代码」的承诺：两个 demo 共用六个逐字节相同的业务模块，SDK 触碰面仅 4 处差异且全部是框架惯例。`@mita-auth/server` 随后在 Cloudflare Workers 与 Vercel Edge 上实测过：同一条 guard 链路逐行一致，不改一行源码，也不需要 `nodejs_compat`。接下来是发布；尚未发布到 npm。
 
 *[English version](./README.md)*
 
