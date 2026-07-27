@@ -69,7 +69,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@mita-auth/core": "workspace:*",
+    "@mita-auth/core": "workspace:^",
     "ky": "^2.0.2",
     "nanostores": "^1.4.1"
   },

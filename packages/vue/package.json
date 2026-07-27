@@ -52,7 +52,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@mita-auth/client": "workspace:*",
+    "@mita-auth/client": "workspace:^",
     "@nanostores/vue": "^1.1.0"
   },
   "peerDependencies": {
