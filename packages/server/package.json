@@ -67,6 +67,7 @@
     "test:edge": "vitest run --config vitest.edge.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:exports": "attw --pack .",
+    "lint:publish": "publint --strict",
     "clean": "rimraf dist"
   },
   "dependencies": {

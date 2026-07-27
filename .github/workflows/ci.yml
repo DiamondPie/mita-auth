@@ -37,6 +37,10 @@ jobs:
 
       - run: pnpm check:exports
 
+      # attw checks that the types resolve; publint checks the other half — that the
+      # manifest fields are legal and that `files` actually ships what they point at.
+      - run: pnpm lint:publish
+
       - run: pnpm test
 
   # The playground is the only place the packages meet a real bundler and a real HTTP
