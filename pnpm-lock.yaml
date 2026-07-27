@@ -129,7 +129,7 @@ importers:
         version: 1.4.1
     devDependencies:
       '@mita-auth/server':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../server
       happy-dom:
         specifier: ^20.11.1
@@ -162,6 +162,9 @@ importers:
       '@nanostores/react':
         specifier: ^1.1.0
         version: 1.1.0(nanostores@1.4.1)(react@19.2.8)
+      nanostores:
+        specifier: ^1.4.1
+        version: 1.4.1
     devDependencies:
       '@testing-library/dom':
         specifier: ^10.4.1
@@ -212,6 +215,9 @@ importers:
       '@nanostores/vue':
         specifier: ^1.1.0
         version: 1.1.0(@vue/devtools-api@8.2.1)(nanostores@1.4.1)(vue@3.5.40(typescript@6.0.3))
+      nanostores:
+        specifier: ^1.4.1
+        version: 1.4.1
     devDependencies:
       '@vue/test-utils':
         specifier: ^2.4.11
