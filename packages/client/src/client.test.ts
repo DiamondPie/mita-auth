@@ -119,6 +119,26 @@ function proofAt(index: number, method = 'POST') {
   return verifyDPoP(attempts[index]?.proof ?? '', { method, url: API_URL });
 }
 
+/**
+ * A round trip slow enough to be measured, standing in for the network so the saturation
+ * check has elapsed wall-clock time to weigh rather than a same-tick answer. Paired with
+ * {@link SATURATED_TIMEOUT_MS} it puts one queued request inside the budget and the next
+ * one outside it, with the lower bound guaranteed — a timer never fires early.
+ */
+const SLOW_RTT_MS = 120;
+const SATURATED_TIMEOUT_MS = 200;
+
+function slowNetwork() {
+  let issued = 0;
+
+  return vi.fn(async () => {
+    await new Promise((resolve) => setTimeout(resolve, SLOW_RTT_MS));
+    issued += 1;
+
+    return accepted(`nonce-${issued}`);
+  });
+}
+
 describe('createProtectedClient', () => {
   it('rejects a nonsensical retry limit', () => {
     expect(() => createProtectedClient({ nonceRetryLimit: -1 })).toThrow(
@@ -304,6 +324,46 @@ describe('createProtectedClient', () => {
       await Promise.all([api.post(API_URL), api.post(API_URL), api.post(API_URL)]);
 
       expect(attempts).toHaveLength(3);
+    });
+
+    /**
+     * ky's per-attempt timer is already running while an attempt waits its turn, so a deep
+     * enough burst would have its tail reported as a `TimeoutError` for requests that were
+     * never sent. These lock the diagnosable refusal that replaces it.
+     */
+    it('refuses an attempt the timeout cannot cover, and never sends it', async () => {
+      const network = slowNetwork();
+      const api = client({ timeout: SATURATED_TIMEOUT_MS, fetch: network });
+
+      // Nothing to predict until a round trip has been observed.
+      await api.post(API_URL);
+
+      const [first, second] = await Promise.allSettled([api.post(API_URL), api.post(API_URL)]);
+
+      expect(first).toMatchObject({ status: 'fulfilled' });
+      expect(second).toMatchObject({
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'client.queue_saturated' }),
+      });
+      expect(network).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves the queue open once the burst has drained', async () => {
+      const api = client({ timeout: SATURATED_TIMEOUT_MS, fetch: slowNetwork() });
+
+      await api.post(API_URL);
+      await Promise.allSettled([api.post(API_URL), api.post(API_URL)]);
+
+      await expect(api.post(API_URL)).resolves.toMatchObject({ status: 200 });
+    });
+
+    it('predicts nothing when there is no timeout to run out of', async () => {
+      const api = client({ timeout: false, fetch: slowNetwork() });
+
+      await api.post(API_URL);
+      const responses = await Promise.all([api.post(API_URL), api.post(API_URL)]);
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
     });
   });
 

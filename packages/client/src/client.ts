@@ -17,6 +17,9 @@ export const DEFAULT_NONCE_RETRY_LIMIT = 1;
 /** ky's own default, which stands whenever the caller passes no `retry` option. */
 const DEFAULT_KY_RETRY_LIMIT = 2;
 
+/** ky's own default, which stands whenever the caller passes no `timeout` option. */
+const DEFAULT_KY_TIMEOUT = 10_000;
+
 /**
  * Why a request was not authorized.
  *
@@ -51,8 +54,6 @@ export interface CreateProtectedClientOptions extends Options {
 
 const DPOP_CHALLENGE_PATTERN = new RegExp(`^${DPOP_AUTH_SCHEME}(?:\\s|$)`, 'i');
 const CHALLENGE_ERROR_PATTERN = /\berror="([^"]*)"/;
-
-const ignore = (): void => {};
 
 /**
  * Builds a `ky` instance that speaks Mita's wire protocol.
@@ -100,11 +101,25 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
     );
   }
 
+  // ky arms its per-attempt timer before it calls the `fetch` option, so the wait in the queue
+  // below is charged to the same budget as the round trip itself. `timeout: false` turns that
+  // timer off, and with it the whole concern.
+  const timeoutBudget =
+    kyOptions.timeout === false ? undefined : (kyOptions.timeout ?? DEFAULT_KY_TIMEOUT);
+
   let pendingKeyPair: Promise<DPoPKeyPair> | undefined;
   let nonce: string | undefined;
 
   /** Tail of the chain every attempt queues behind. See {@link attempt}. */
   let queue: Promise<unknown> = Promise.resolve();
+
+  /** Attempts queued or in flight, and how long the last completed round trip took. */
+  let queueDepth = 0;
+  let lastRtt: number | undefined;
+
+  const leaveQueue = (): void => {
+    queueDepth -= 1;
+  };
 
   /**
    * Handshake budget for one call, kept apart from `retry.limit` so that a backoff spent
@@ -140,8 +155,30 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
    *
    * Signing here also puts the proof after every caller hook has finished rewriting the
    * request, which is where it has to be — the proof binds the method and URL it is sent to.
+   *
+   * The one cost of queueing is that ky's timer is already running while an attempt waits, so
+   * a burst deep enough to outlast `timeout` would have its tail rejected as timed out —
+   * without a status code, without `onUnauthorized`, and without ever reaching the server.
+   * Attempts that can be seen to be in that position up front are refused instead.
    */
   const attempt = (request: Request, init?: RequestInit): Promise<Response> => {
+    // Only armed once a round trip has been observed; a lone request cannot queue behind
+    // anything, so there is nothing to predict before the first one comes back.
+    if (
+      timeoutBudget !== undefined &&
+      lastRtt !== undefined &&
+      (queueDepth + 1) * lastRtt > timeoutBudget
+    ) {
+      // Refused before joining the queue, so it does not deepen the saturation it reports.
+      // Rejecting rather than throwing also lets ky clear the timer it armed for this attempt.
+      return Promise.reject(
+        new MitaError(
+          'client.queue_saturated',
+          `This client already has ${queueDepth} request(s) queued at about ${lastRtt} ms each, which leaves no room for another inside the ${timeoutBudget} ms timeout. Requests on one instance are sent one at a time and share that budget, so raise \`timeout\`, send fewer at once, or split the burst across separate clients.`,
+        ),
+      );
+    }
+
     const run = async (): Promise<Response> => {
       request.headers.set(
         MITA_HEADERS.dpop,
@@ -152,7 +189,11 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
         }),
       );
 
+      const sentAt = Date.now();
       const response = await baseFetch(request, init);
+
+      lastRtt = Date.now() - sentAt;
+
       const issued = response.headers.get(MITA_HEADERS.dpopNonce);
 
       if (issued !== null) {
@@ -168,11 +209,13 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
       return response;
     };
 
+    queueDepth += 1;
+
     const settled = queue.then(run, run);
 
     // The queue tracks arrival, not outcome: a failed attempt must not wedge the ones behind
     // it, and its rejection is the caller's to handle rather than the chain's.
-    queue = settled.then(ignore, ignore);
+    queue = settled.then(leaveQueue, leaveQueue);
 
     return settled;
   };
