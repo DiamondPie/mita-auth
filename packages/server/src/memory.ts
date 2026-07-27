@@ -12,7 +12,6 @@
  * import line to spot in review, and one thing to grep for before a deploy.
  */
 import { MitaError, createNonce } from '@mita-auth/core';
-import { nonceSchema } from '@mita-auth/core/schemas';
 import type { Duration } from '@upstash/ratelimit';
 
 import {
@@ -30,6 +29,7 @@ import {
   type ReplayCheck,
   type ReplayStore,
 } from './replay';
+import { isWellFormedNonce } from './validate';
 
 /** Dead entries are swept on write rather than by a timer, which Edge would not keep alive. */
 const SWEEP_INTERVAL_WRITES = 256;
@@ -92,7 +92,7 @@ export function createMemoryReplayStore(options: CreateMemoryReplayStoreOptions 
     },
 
     consumeNonce(value) {
-      if (!nonceSchema.safeParse(value).success) {
+      if (!isWellFormedNonce(value)) {
         return Promise.resolve<ReplayCheck>({ ok: false, reason: 'unknown_nonce' });
       }
 

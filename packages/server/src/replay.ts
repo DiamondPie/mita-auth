@@ -1,6 +1,7 @@
 import { MitaError, createNonce, type Nonce } from '@mita-auth/core';
-import { nonceSchema } from '@mita-auth/core/schemas';
 import type { Redis } from '@upstash/redis';
+
+import { isWellFormedNonce } from './validate';
 
 export const DEFAULT_REPLAY_STORE_PREFIX = 'mita';
 
@@ -108,7 +109,7 @@ export function createReplayStore(options: CreateReplayStoreOptions): ReplayStor
     },
 
     async consumeNonce(value) {
-      if (!nonceSchema.safeParse(value).success) {
+      if (!isWellFormedNonce(value)) {
         return { ok: false, reason: 'unknown_nonce' };
       }
 

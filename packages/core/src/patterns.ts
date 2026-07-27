@@ -22,3 +22,6 @@ export const MAX_DPOP_PROOF_LENGTH = 4096;
 
 /** SHA-256 JWK thumbprint (RFC 7638), always 43 base64url characters. */
 export const JWK_THUMBPRINT_LENGTH = 43;
+
+/** Cloudflare caps Turnstile tokens at 2048 characters. */
+export const MAX_TURNSTILE_TOKEN_LENGTH = 2048;

@@ -7,6 +7,7 @@ import {
   COMPACT_JWT_PATTERN,
   JWK_THUMBPRINT_LENGTH,
   MAX_DPOP_PROOF_LENGTH,
+  MAX_TURNSTILE_TOKEN_LENGTH,
 } from './patterns';
 
 const base64urlLength = (bytes: number): number => Math.ceil((bytes * 4) / 3);
@@ -31,11 +32,10 @@ export const dpopProofSchema = z
   .max(MAX_DPOP_PROOF_LENGTH, 'DPoP proof exceeds the maximum accepted length.')
   .regex(COMPACT_JWT_PATTERN, 'DPoP proof must be a compact JWT.');
 
-/** Cloudflare caps Turnstile tokens at 2048 characters. */
 export const turnstileTokenSchema = z
   .string()
   .min(1, 'Turnstile token must not be empty.')
-  .max(2048, 'Turnstile token exceeds the maximum accepted length.');
+  .max(MAX_TURNSTILE_TOKEN_LENGTH, 'Turnstile token exceeds the maximum accepted length.');
 
 /**
  * Baseline contract for the security material carried alongside a protected request.

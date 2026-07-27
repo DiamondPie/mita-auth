@@ -1,4 +1,4 @@
-import { turnstileTokenSchema } from '@mita-auth/core/schemas';
+import { isWellFormedTurnstileToken } from './validate';
 
 export const TURNSTILE_SITEVERIFY_ENDPOINT =
   'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -145,7 +145,7 @@ export async function verifyTurnstileToken(
     now = Date.now(),
   } = options;
 
-  if (!turnstileTokenSchema.safeParse(token).success) {
+  if (!isWellFormedTurnstileToken(token)) {
     return {
       success: false,
       reason: 'rejected',
