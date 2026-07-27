@@ -6,5 +6,7 @@
   // No `compatibility_flags`, and `nodejs_compat` least of all: @mita-auth/server claims to
   // be Web-standard, and a Worker that only runs with the Node shim would falsify that
   // claim rather than reveal a patch to apply.
+  // `worker-configuration.d.ts` is derived entirely from this file and is git-ignored, so
+  // the `typecheck` script regenerates it rather than expecting a 14k-line copy in the repo.
   "observability": { "enabled": true }
 }

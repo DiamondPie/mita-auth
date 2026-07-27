@@ -11,6 +11,9 @@ allowBuilds:
   msw: false
   # Next pulls it in for image optimisation, which neither demo uses.
   sharp: false
+  # Its postinstall links the platform build of the Workers runtime. Without it `wrangler
+  # dev` has nothing to run, which is the whole of Phase 5.
+  workerd: true
 minimumReleaseAgeExclude:
   - tsdown@0.22.14
   - '@next/env@16.2.12'

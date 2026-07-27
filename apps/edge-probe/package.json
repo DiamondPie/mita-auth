@@ -9,7 +9,7 @@
     "dev:remote": "wrangler dev --remote",
     "deploy": "wrangler deploy",
     "types": "wrangler types",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "wrangler types && tsc -p tsconfig.json --noEmit",
     "clean": "rimraf .wrangler dist"
   },
   "dependencies": {
