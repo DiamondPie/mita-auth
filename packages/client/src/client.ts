@@ -66,6 +66,14 @@ const CHALLENGE_ERROR_PATTERN = /\berror="([^"]*)"/;
  * A client with no nonce yet cannot avoid being turned away once: RFC 9449 defines that
  * first `use_dpop_nonce` rejection as the handshake. It is resolved here rather than
  * surfaced to the caller.
+ *
+ * The whole protocol rides on this instance's hooks — signing and queueing are installed by
+ * the `init` hook below, the Turnstile header by `beforeRequest`, the handshake by
+ * `afterResponse`. ky appends hooks when a call or an `extend()` supplies its own, so adding
+ * to them is safe; *replacing* them is not. `hooks: replaceOption({ ... })` and
+ * `hooks: { init: undefined }` both drop this package's hooks, and what is left is plain ky:
+ * requests go out unsigned, unqueued and without a token, and the only symptom is the
+ * server refusing them. Add hooks, never replace them.
  */
 export function createProtectedClient(options: CreateProtectedClientOptions = {}): KyInstance {
   const {

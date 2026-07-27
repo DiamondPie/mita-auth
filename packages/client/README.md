@@ -69,6 +69,12 @@ people should reach**.
   `isTimeoutError` and `KyInstance` are re-exported from here. Anything past that is ky's
   own API — import `ky` directly for it. `MitaError` and `isMitaError` come across for the
   same reason: a refusal Mita made on its own has no response to inspect, only a `code`.
+- **Add to the instance's hooks; never replace them.** The protocol lives in them — signing
+  and queueing in `init`, the Turnstile header in `beforeRequest`, the nonce handshake in
+  `afterResponse`. ky *appends* hooks that a call or an `extend()` supplies, so adding is
+  safe. `hooks: replaceOption({ … })` and `hooks: { init: undefined }` are the two that drop
+  them instead, and what is left is plain ky: requests go out unsigned, unqueued and without
+  a token, with nothing to show for it locally beyond the server refusing them.
 - **The first request to a server is answered with a 401.** RFC 9449 defines that rejection
   as the nonce handshake; the client resolves it and retries on its own, which costs one
   extra round trip and one extra rate-limit token per cold start. Size your rate limits with
