@@ -1,10 +1,12 @@
 /**
  * Shapes the wire protocol relies on, kept apart from the schemas built out of them.
  *
- * `schemas.ts` pulls in Zod, and `@mita-auth/core` is bundled one file per entry point:
- * a module that reaches in here for a regex would drag Zod along with it, into browser
- * bundles that never validate anything. These constants have no dependencies at all, so
- * both the signing path and the schemas can share them without that cost.
+ * `schemas.ts` pulls in Zod. Had these constants lived there, the signing path would reach
+ * for a regex and take Zod with it — into browser bundles that never validate anything, and
+ * on terms no one controls: how the bundler splits its chunks, and whether the consumer's
+ * own bundler then shakes the unused half back out, are not things a library can promise.
+ * These constants have no dependencies at all, so both sides can share them without ever
+ * putting that question.
  */
 
 export const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;

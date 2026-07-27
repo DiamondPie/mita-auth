@@ -1,13 +1,3 @@
-import { useStore } from '@nanostores/vue';
-import type { Ref } from 'vue';
-import type { SessionStatus, TurnstileStatus } from '@mita-auth/client';
-import {
-  $hasProvenKey,
-  $sessionStatus,
-  $turnstileStatus,
-  $turnstileToken,
-} from '@mita-auth/client';
-
 /**
  * These hand back a `ref`, not a value — templates unwrap it, scripts read `.value`.
  *
@@ -19,6 +9,16 @@ import {
  * One composable per store, so a component that watches the widget is not woken by every
  * session change.
  */
+import { useStore } from '@nanostores/vue';
+import type { Ref } from 'vue';
+import type { SessionStatus, TurnstileStatus } from '@mita-auth/client';
+import {
+  $hasProvenKey,
+  $sessionStatus,
+  $turnstileStatus,
+  $turnstileToken,
+} from '@mita-auth/client';
+
 /**
  * Whether the server has accepted a proof from this browser's key pair.
  *

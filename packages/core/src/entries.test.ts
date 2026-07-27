@@ -2,11 +2,12 @@
  * Bundles each entry point the way an application would, and asserts which of them can
  * reach Zod.
  *
- * This package ships one file per entry, so tree-shaking inside it degrades to statement
- * level: a chain like `z.string().max().regex()` is not provably side-effect free, and a
- * single re-export of `schemas.ts` from `index.ts` puts all of Zod — around 16 kB gzip —
- * in front of every browser that does nothing but sign a proof. Importing the source
- * directly, as every other test here does, cannot see that; only a bundler can.
+ * A single re-export of `schemas.ts` from `index.ts` would put all of Zod — around 16 kB
+ * gzip — in front of every browser that does nothing but sign a proof: a chain like
+ * `z.string().max().regex()` is not provably side-effect free, so nothing downstream is
+ * obliged to shake it back out. That is why the entry points are the boundary and this test
+ * measures them as one. Importing the source directly, as every other test here does,
+ * cannot see it; only a bundler can.
  *
  * The second case is the control. Without it, the first would keep passing if the
  * assertion stopped matching anything at all.
