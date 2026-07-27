@@ -56,8 +56,16 @@ const $writableTurnstile = atom<TurnstileChallenge>(IDLE_CHALLENGE);
 
 export const $sessionStatus: ReadableAtom<SessionStatus> = readonlyType($writableSessionStatus);
 
-/** Whether the server has accepted a proof from this browser's key pair. */
-export const $isAuthenticated: ReadableAtom<boolean> = computed(
+/**
+ * Whether the server has accepted a proof from this browser's key pair.
+ *
+ * **This is not a sign-in.** Mita's DPoP exchange proves that a request was signed by
+ * whoever holds a given private key and that the same key signed the ones before it — never
+ * who that is. Any visitor generates a key pair on their first request and turns this `true`,
+ * so gating anything that matters on it grants it to everyone. It answers "can this browser
+ * talk to the guard", not "who is this".
+ */
+export const $hasProvenKey: ReadableAtom<boolean> = computed(
   $writableSessionStatus,
   (status) => status === 'active',
 );

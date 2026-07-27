@@ -2,7 +2,7 @@ import { useStore } from '@nanostores/vue';
 import type { Ref } from 'vue';
 import type { SessionStatus, TurnstileStatus } from '@mita-auth/client';
 import {
-  $isAuthenticated,
+  $hasProvenKey,
   $sessionStatus,
   $turnstileStatus,
   $turnstileToken,
@@ -19,8 +19,14 @@ import {
  * One composable per store, so a component that watches the widget is not woken by every
  * session change.
  */
-export function useIsAuthenticated(): Readonly<Ref<boolean>> {
-  return useStore($isAuthenticated);
+/**
+ * Whether the server has accepted a proof from this browser's key pair.
+ *
+ * **Not a sign-in check.** Any visitor gets a key pair on their first request and turns this
+ * `true`, so it cannot gate anything that only some people should see.
+ */
+export function useHasProvenKey(): Readonly<Ref<boolean>> {
+  return useStore($hasProvenKey);
 }
 
 export function useSessionStatus(): Readonly<Ref<SessionStatus>> {

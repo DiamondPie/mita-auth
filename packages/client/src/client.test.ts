@@ -14,7 +14,7 @@ import { createProtectedClient } from './client';
 // Reached through this package's own re-export, the way a consumer is meant to: ky is
 // not something an application should have to install to read a failure.
 import { isHTTPError } from './ky';
-import { $isAuthenticated, $turnstileStatus, resetMitaState, setTurnstileToken } from './state';
+import { $hasProvenKey, $turnstileStatus, resetMitaState, setTurnstileToken } from './state';
 
 const API_URL = 'https://api.test/comments';
 
@@ -301,7 +301,7 @@ describe('createProtectedClient', () => {
       ]);
 
       expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
-      expect($isAuthenticated.get()).toBe(true);
+      expect($hasProvenKey.get()).toBe(true);
     });
 
     it('spends one handshake for the burst, not one per request', async () => {
@@ -407,7 +407,7 @@ describe('createProtectedClient', () => {
 
       await client().post(API_URL).json();
 
-      expect($isAuthenticated.get()).toBe(true);
+      expect($hasProvenKey.get()).toBe(true);
     });
 
     // Only a server that ran the DPoP path hands back a nonce, so a plain 200 proves
@@ -417,7 +417,7 @@ describe('createProtectedClient', () => {
 
       await client().post(API_URL).json();
 
-      expect($isAuthenticated.get()).toBe(false);
+      expect($hasProvenKey.get()).toBe(false);
     });
 
     // `state.ts` reserves `unauthorized` for a rejection retrying cannot fix. A spent
@@ -439,7 +439,7 @@ describe('createProtectedClient', () => {
       expect(onUnauthorized).toHaveBeenCalledWith(
         expect.objectContaining({ reason: 'nonce_exhausted' }),
       );
-      expect($isAuthenticated.get()).toBe(true);
+      expect($hasProvenKey.get()).toBe(true);
     });
 
     it('drops authentication when a proof is rejected', async () => {
@@ -449,7 +449,7 @@ describe('createProtectedClient', () => {
       await api.post(API_URL).json();
       await expect(api.post(API_URL)).rejects.toThrow();
 
-      expect($isAuthenticated.get()).toBe(false);
+      expect($hasProvenKey.get()).toBe(false);
     });
   });
 

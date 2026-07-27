@@ -52,11 +52,15 @@ simply failed a challenge would be filed as a page error.
 
 ## State
 
-`$sessionStatus`, `$isAuthenticated`, `$turnstileStatus` and `$turnstileToken` are nanostores
+`$sessionStatus`, `$hasProvenKey`, `$turnstileStatus` and `$turnstileToken` are nanostores
 atoms. Subscribe with `.subscribe()`, or use the framework bindings.
 
 A session turns `active` the moment the server accepts a proof signed by this browser's key
-pair — there is no login step.
+pair — there is no login step. `$hasProvenKey` reports exactly that and nothing more: the
+DPoP exchange proves that a request was signed by whoever holds a given private key and that
+the same key signed the ones before it, never who that is. Every visitor gets a key pair on
+their first request, so it turns `true` for all of them — **it cannot gate anything only some
+people should reach**.
 
 ## Notes
 

@@ -19,9 +19,9 @@ API this package relies on.
 
 ```vue
 <script setup lang="ts">
-import { MitaTurnstile, useIsAuthenticated, useTurnstileStatus } from '@mita-auth/vue';
+import { MitaTurnstile, useHasProvenKey, useTurnstileStatus } from '@mita-auth/vue';
 
-const authenticated = useIsAuthenticated();
+const provenKey = useHasProvenKey();
 const turnstile = useTurnstileStatus();
 </script>
 
@@ -30,7 +30,7 @@ const turnstile = useTurnstileStatus();
     <!-- … -->
     <MitaTurnstile :site-key="siteKey" @error="(code) => console.warn(code)" />
     <button :disabled="turnstile !== 'solved'">Post</button>
-    <span v-if="authenticated">session active</span>
+    <span v-if="provenKey">session active</span>
   </form>
 </template>
 ```
@@ -39,7 +39,7 @@ const turnstile = useTurnstileStatus();
 
 | Composable | Reads |
 | --- | --- |
-| `useIsAuthenticated()` | whether the server has accepted a proof from this browser |
+| `useHasProvenKey()` | whether the server has accepted a proof from this browser's key pair — **not a sign-in check**, see Notes |
 | `useSessionStatus()` | `'idle' \| 'active' \| 'unauthorized'` |
 | `useTurnstileStatus()` | `'idle' \| 'pending' \| 'solved' \| 'spent' \| 'expired' \| 'error'` |
 | `useTurnstileToken()` | the unspent token, or `null` |
@@ -49,6 +49,11 @@ and `error`.
 
 ## Notes
 
+- **`useHasProvenKey()` is not an identity check.** Mita has no login step: the DPoP exchange
+  proves that a request was signed by whoever holds a given private key and that the same key
+  signed the ones before it, never who that is. Every visitor gets a key pair on their first
+  request, so `useHasProvenKey()` turns `true` for all of them. Use it to show connection
+  state; never to gate anything only some people should reach.
 - This package is a binding layer only. It deliberately does not re-export
   `@mita-auth/client`'s surface, so `createProtectedClient` is imported from there.
 - `<MitaTurnstile>` is built with a render function, so the custom element tag never reaches

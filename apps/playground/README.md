@@ -124,7 +124,7 @@ infrastructure; the regression guard that came out of it is a unit test in
 
 Two differences the handoff expected to see did **not** materialise:
 
-- **No `.value` anywhere.** `useIsAuthenticated()` returns a value in React and a ref in Vue,
+- **No `.value` anywhere.** `useHasProvenKey()` returns a value in React and a ref in Vue,
   but a ref unwraps in a template, and this component only reads them there.
 - **No callback-prop / emits split.** `<MitaTurnstile>` is driven entirely through the
   nanostores state, so neither side wires up an event handler.

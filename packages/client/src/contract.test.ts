@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { createProtectedClient } from './client';
 import { isHTTPError } from './ky';
-import { $isAuthenticated, resetMitaState, setTurnstileToken } from './state';
+import { $hasProvenKey, resetMitaState, setTurnstileToken } from './state';
 
 const API_URL = 'https://api.test/comments';
 const REDIS_URL = 'https://contract.upstash.test';
@@ -148,7 +148,7 @@ describe('client and server contract', () => {
 
     expect(response.status).toBe(200);
     expect(attempts).toHaveLength(2);
-    expect($isAuthenticated.get()).toBe(true);
+    expect($hasProvenKey.get()).toBe(true);
   });
 
   // The whole reason the guard defers siteverify: Cloudflare accepts a token once, and
@@ -179,7 +179,7 @@ describe('client and server contract', () => {
 
     expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
     expect(attempts).toHaveLength(4);
-    expect($isAuthenticated.get()).toBe(true);
+    expect($hasProvenKey.get()).toBe(true);
   });
 
   it('needs no further handshake once a nonce is in hand', async () => {

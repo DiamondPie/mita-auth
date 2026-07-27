@@ -10,7 +10,7 @@ import { defineComponent, h, nextTick, type Component } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  useIsAuthenticated,
+  useHasProvenKey,
   useSessionStatus,
   useTurnstileStatus,
   useTurnstileToken,
@@ -18,14 +18,14 @@ import {
 
 const Probe = defineComponent({
   setup() {
-    const isAuthenticated = useIsAuthenticated();
+    const hasProvenKey = useHasProvenKey();
     const sessionStatus = useSessionStatus();
     const turnstileStatus = useTurnstileStatus();
     const turnstileToken = useTurnstileToken();
 
     return () =>
       h('ul', [
-        h('li', { 'data-store': 'isAuthenticated' }, String(isAuthenticated.value)),
+        h('li', { 'data-store': 'hasProvenKey' }, String(hasProvenKey.value)),
         h('li', { 'data-store': 'sessionStatus' }, sessionStatus.value),
         h('li', { 'data-store': 'turnstileStatus' }, turnstileStatus.value),
         h('li', { 'data-store': 'turnstileToken' }, turnstileToken.value ?? 'none'),
@@ -48,7 +48,7 @@ function unmountAll(): void {
 
 function read(wrapper: VueWrapper): Record<string, string> {
   return {
-    isAuthenticated: wrapper.get('[data-store="isAuthenticated"]').text(),
+    hasProvenKey: wrapper.get('[data-store="hasProvenKey"]').text(),
     sessionStatus: wrapper.get('[data-store="sessionStatus"]').text(),
     turnstileStatus: wrapper.get('[data-store="turnstileStatus"]').text(),
     turnstileToken: wrapper.get('[data-store="turnstileToken"]').text(),
@@ -68,7 +68,7 @@ describe('composables', () => {
     const wrapper = mounted(Probe);
 
     expect(read(wrapper)).toEqual({
-      isAuthenticated: 'false',
+      hasProvenKey: 'false',
       sessionStatus: 'idle',
       turnstileStatus: 'idle',
       turnstileToken: 'none',
@@ -81,7 +81,7 @@ describe('composables', () => {
     markSessionActive();
     await nextTick();
 
-    expect(read(wrapper)).toMatchObject({ isAuthenticated: 'true', sessionStatus: 'active' });
+    expect(read(wrapper)).toMatchObject({ hasProvenKey: 'true', sessionStatus: 'active' });
   });
 
   it('re-renders once the server rejects a proof', async () => {
@@ -92,7 +92,7 @@ describe('composables', () => {
     await nextTick();
 
     expect(read(wrapper)).toMatchObject({
-      isAuthenticated: 'false',
+      hasProvenKey: 'false',
       sessionStatus: 'unauthorized',
     });
   });
@@ -115,7 +115,7 @@ describe('composables', () => {
     await nextTick();
 
     expect(read(wrapper)).toEqual({
-      isAuthenticated: 'false',
+      hasProvenKey: 'false',
       sessionStatus: 'idle',
       turnstileStatus: 'idle',
       turnstileToken: 'none',

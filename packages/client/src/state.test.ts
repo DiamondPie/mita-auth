@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  $isAuthenticated,
+  $hasProvenKey,
   $sessionStatus,
   $turnstileStatus,
   $turnstileToken,
@@ -23,7 +23,7 @@ describe('mita state', () => {
 
   it('starts idle, unauthenticated and without a token', () => {
     expect($sessionStatus.get()).toBe('idle');
-    expect($isAuthenticated.get()).toBe(false);
+    expect($hasProvenKey.get()).toBe(false);
     expect($turnstileStatus.get()).toBe('idle');
     expect($turnstileToken.get()).toBeNull();
   });
@@ -33,7 +33,7 @@ describe('mita state', () => {
       markSessionActive();
 
       expect($sessionStatus.get()).toBe('active');
-      expect($isAuthenticated.get()).toBe(true);
+      expect($hasProvenKey.get()).toBe(true);
     });
 
     it('drops authentication when the server rejects a proof', () => {
@@ -41,12 +41,12 @@ describe('mita state', () => {
       markSessionUnauthorized();
 
       expect($sessionStatus.get()).toBe('unauthorized');
-      expect($isAuthenticated.get()).toBe(false);
+      expect($hasProvenKey.get()).toBe(false);
     });
 
-    it('notifies subscribers of $isAuthenticated only when the derived value changes', () => {
+    it('notifies subscribers of $hasProvenKey only when the derived value changes', () => {
       const listener = vi.fn();
-      const unsubscribe = $isAuthenticated.listen(listener);
+      const unsubscribe = $hasProvenKey.listen(listener);
 
       markSessionActive();
       markSessionActive();
@@ -142,7 +142,7 @@ describe('mita state', () => {
     resetMitaState();
 
     expect($sessionStatus.get()).toBe('idle');
-    expect($isAuthenticated.get()).toBe(false);
+    expect($hasProvenKey.get()).toBe(false);
     expect($turnstileStatus.get()).toBe('idle');
     expect($turnstileToken.get()).toBeNull();
   });

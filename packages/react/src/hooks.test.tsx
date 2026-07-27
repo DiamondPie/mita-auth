@@ -9,7 +9,7 @@ import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  useIsAuthenticated,
+  useHasProvenKey,
   useSessionStatus,
   useTurnstileStatus,
   useTurnstileToken,
@@ -18,7 +18,7 @@ import {
 function Probe(): ReactElement {
   return (
     <ul>
-      <li data-testid="isAuthenticated">{String(useIsAuthenticated())}</li>
+      <li data-testid="hasProvenKey">{String(useHasProvenKey())}</li>
       <li data-testid="sessionStatus">{useSessionStatus()}</li>
       <li data-testid="turnstileStatus">{useTurnstileStatus()}</li>
       <li data-testid="turnstileToken">{useTurnstileToken() ?? 'none'}</li>
@@ -28,7 +28,7 @@ function Probe(): ReactElement {
 
 function read(): Record<string, string | null> {
   return {
-    isAuthenticated: screen.getByTestId('isAuthenticated').textContent,
+    hasProvenKey: screen.getByTestId('hasProvenKey').textContent,
     sessionStatus: screen.getByTestId('sessionStatus').textContent,
     turnstileStatus: screen.getByTestId('turnstileStatus').textContent,
     turnstileToken: screen.getByTestId('turnstileToken').textContent,
@@ -48,7 +48,7 @@ describe('hooks', () => {
     render(<Probe />);
 
     expect(read()).toEqual({
-      isAuthenticated: 'false',
+      hasProvenKey: 'false',
       sessionStatus: 'idle',
       turnstileStatus: 'idle',
       turnstileToken: 'none',
@@ -62,7 +62,7 @@ describe('hooks', () => {
       markSessionActive();
     });
 
-    expect(read()).toMatchObject({ isAuthenticated: 'true', sessionStatus: 'active' });
+    expect(read()).toMatchObject({ hasProvenKey: 'true', sessionStatus: 'active' });
   });
 
   it('re-renders once the server rejects a proof', () => {
@@ -73,7 +73,7 @@ describe('hooks', () => {
       markSessionUnauthorized();
     });
 
-    expect(read()).toMatchObject({ isAuthenticated: 'false', sessionStatus: 'unauthorized' });
+    expect(read()).toMatchObject({ hasProvenKey: 'false', sessionStatus: 'unauthorized' });
   });
 
   it('re-renders with the token the visitor earned', () => {
@@ -96,7 +96,7 @@ describe('hooks', () => {
     });
 
     expect(read()).toEqual({
-      isAuthenticated: 'false',
+      hasProvenKey: 'false',
       sessionStatus: 'idle',
       turnstileStatus: 'idle',
       turnstileToken: 'none',

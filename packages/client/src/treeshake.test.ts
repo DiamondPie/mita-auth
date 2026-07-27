@@ -79,7 +79,7 @@ describe('bundled state module', () => {
 
   it('still applies the session writers', () => {
     state.markSessionActive();
-    expect(state.$isAuthenticated.get()).toBe(true);
+    expect(state.$hasProvenKey.get()).toBe(true);
 
     state.markSessionUnauthorized();
     expect(state.$sessionStatus.get()).toBe('unauthorized');

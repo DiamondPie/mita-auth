@@ -19,10 +19,10 @@ Peer: `react@^18 || ^19`.
 ```tsx
 'use client';
 
-import { MitaTurnstile, useIsAuthenticated, useTurnstileStatus } from '@mita-auth/react';
+import { MitaTurnstile, useHasProvenKey, useTurnstileStatus } from '@mita-auth/react';
 
 export function CommentForm({ siteKey }: { siteKey: string }) {
-  const authenticated = useIsAuthenticated();
+  const provenKey = useHasProvenKey();
   const turnstile = useTurnstileStatus();
 
   return (
@@ -30,7 +30,7 @@ export function CommentForm({ siteKey }: { siteKey: string }) {
       {/* … */}
       <MitaTurnstile siteKey={siteKey} onError={(code) => console.warn(code)} />
       <button disabled={turnstile !== 'solved'}>Post</button>
-      {authenticated ? <span>session active</span> : null}
+      {provenKey ? <span>session active</span> : null}
     </form>
   );
 }
@@ -40,7 +40,7 @@ export function CommentForm({ siteKey }: { siteKey: string }) {
 
 | Hook | Reads |
 | --- | --- |
-| `useIsAuthenticated()` | whether the server has accepted a proof from this browser |
+| `useHasProvenKey()` | whether the server has accepted a proof from this browser's key pair — **not a sign-in check**, see Notes |
 | `useSessionStatus()` | `'idle' \| 'active' \| 'unauthorized'` |
 | `useTurnstileStatus()` | `'idle' \| 'pending' \| 'solved' \| 'spent' \| 'expired' \| 'error'` |
 | `useTurnstileToken()` | the unspent token, or `null` |
@@ -49,6 +49,11 @@ Plus `MitaTurnstile` and its props type.
 
 ## Notes
 
+- **`useHasProvenKey()` is not an identity check.** Mita has no login step: the DPoP exchange
+  proves that a request was signed by whoever holds a given private key and that the same key
+  signed the ones before it, never who that is. Every visitor gets a key pair on their first
+  request, so `useHasProvenKey()` turns `true` for all of them. Use it to show connection
+  state; never to gate anything only some people should reach.
 - This package is a binding layer only. It deliberately does not re-export
   `@mita-auth/client`'s surface, so `createProtectedClient` is imported from there.
 - Every export is a hook or a client component, so the built entry carries `'use client'`.

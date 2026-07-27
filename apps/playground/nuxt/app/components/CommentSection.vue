@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { commentSchema } from '@mita-auth/core/schemas';
-import { MitaTurnstile, useIsAuthenticated, useTurnstileStatus } from '@mita-auth/vue';
+import { MitaTurnstile, useHasProvenKey, useTurnstileStatus } from '@mita-auth/vue';
 import { onMounted, ref } from 'vue';
 
 import { getApi } from '~~/lib/api';
@@ -8,7 +8,7 @@ import { TURNSTILE_SITE_KEYS, type TurnstileMode } from '~~/lib/config';
 import { describeFailure } from '~~/lib/failure';
 import type { Comment, CommentsResponse } from '~~/lib/types';
 
-const isAuthenticated = useIsAuthenticated();
+const hasProvenKey = useHasProvenKey();
 const turnstileStatus = useTurnstileStatus();
 
 const comments = ref<Comment[]>([]);
@@ -63,7 +63,7 @@ const submit = async () => {
 <template>
   <div class="badges">
     <span class="badge">
-      session <strong>{{ isAuthenticated ? 'active' : 'idle' }}</strong>
+      session <strong>{{ hasProvenKey ? 'active' : 'idle' }}</strong>
     </span>
     <span class="badge">
       turnstile <strong>{{ turnstileStatus }}</strong>

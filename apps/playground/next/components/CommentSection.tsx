@@ -1,7 +1,7 @@
 'use client';
 
 import { commentSchema } from '@mita-auth/core/schemas';
-import { MitaTurnstile, useIsAuthenticated, useTurnstileStatus } from '@mita-auth/react';
+import { MitaTurnstile, useHasProvenKey, useTurnstileStatus } from '@mita-auth/react';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { getApi } from '@/lib/api';
@@ -10,7 +10,7 @@ import { describeFailure } from '@/lib/failure';
 import type { Comment, CommentsResponse } from '@/lib/types';
 
 export function CommentSection() {
-  const isAuthenticated = useIsAuthenticated();
+  const hasProvenKey = useHasProvenKey();
   const turnstileStatus = useTurnstileStatus();
 
   const [comments, setComments] = useState<Comment[]>([]);
@@ -67,7 +67,7 @@ export function CommentSection() {
     <>
       <div className="badges">
         <span className="badge">
-          session <strong>{isAuthenticated ? 'active' : 'idle'}</strong>
+          session <strong>{hasProvenKey ? 'active' : 'idle'}</strong>
         </span>
         <span className="badge">
           turnstile <strong>{turnstileStatus}</strong>
