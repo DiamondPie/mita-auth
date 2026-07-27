@@ -71,12 +71,27 @@ people should reach**.
 - **The first request to a server is answered with a 401.** RFC 9449 defines that rejection
   as the nonce handshake; the client resolves it and retries on its own, which costs one
   extra round trip and one extra rate-limit token per cold start. Size your rate limits with
-  that in mind.
-- **Requests on one instance are sent one at a time.** A nonce is redeemed exactly once, so
-  attempts queue behind each other. A burst costs no more requests than it would serially,
-  but it does not run in parallel either.
+  that in mind. In full, one cold-start submission is 2 requests, 2 rate-limit tokens and 1
+  human verification — and any failure invalidates the token, so an interactive site key
+  makes the visitor solve another challenge before they can retry.
+- **Requests on one instance are sent one at a time, and share one `timeout` budget.** A
+  nonce is redeemed exactly once, so attempts queue behind each other. A burst costs no more
+  requests than it would serially, but it does not run in parallel — and ky starts its
+  per-attempt timer before an attempt reaches the queue, so waiting in line is charged
+  against the same `timeout` as the round trip. With ky's 10 s default, the `⌊10000 / RTT⌋`th
+  concurrent call is where that budget runs out. Raise `timeout` in proportion to how deep
+  your bursts get, or give independent bursts their own client. An attempt that can be seen
+  up front not to fit is rejected with a `MitaError` whose code is `client.queue_saturated`,
+  rather than being sent and reported as a timeout it never had a chance to beat.
 - **One Turnstile token per submission.** Sending it spends it; the widget watches for that
-  and asks the visitor's browser for a fresh challenge without being told.
+  and asks the visitor's browser for a fresh challenge without being told. This happens when
+  the request goes out, not when it succeeds, so a rejection the server made *before*
+  reaching Cloudflare — a 429, a 401, a missing-token 403 — still costs the visitor a fresh
+  challenge even though the token was never redeemed upstream.
+- **At most one `<mita-turnstile>` per page.** The widget's state is a single module-level
+  store, so a second element on the same page writes over the first one's token, resets when
+  the first one submits, and reports a status the UI cannot attribute to either. One form per
+  page with a challenge on it, or one shared widget above both.
 - Key pairs are generated non-extractable and held only in memory. Closing the tab ends the
   session.
 - Importing the main entry on a server is harmless: the element module falls back to an
