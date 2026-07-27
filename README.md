@@ -23,8 +23,8 @@ The security logic behind a typical comment section or guestbook — human verif
 
 ## License
 
-Planned: **MIT License**. Core protection logic stays public and transparent — but secrets, Redis connection strings, encryption salts, and any other project-specific sensitive config must always be injected via environment variables and never committed to this repository.
+**MIT License** — see [LICENSE](./LICENSE). Core protection logic stays public and transparent — but secrets, Redis connection strings, encryption salts, and any other project-specific sensitive config must always be injected via environment variables and never committed to this repository.
 
 ---
 
-For the confirmed tech stack, monorepo architecture, build/release pipeline, and roadmap, see [temp/plan.md](./temp/plan.md).
+Each package documents its own surface, wire format, and runtime requirements in its README: [core](./packages/core), [server](./packages/server), [client](./packages/client), [react](./packages/react), [vue](./packages/vue). The tech-stack and architecture decisions behind them are kept as development notes in the working tree and are not part of the published repository.

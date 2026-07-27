@@ -2,8 +2,8 @@
 
 Two comment-box demos — one Next.js, one Nuxt — built on the same five `@mita-auth` packages.
 
-They exist to test one claim from [temp/plan.md](../../temp/plan.md): that Mita needs **no
-framework adaptation code**. The way to read this directory is to diff the two demos and
+They exist to test the claim Mita is built on: that it needs **no framework adaptation
+code**. The way to read this directory is to diff the two demos and
 check that what is left is framework idiom rather than SDK plumbing. The
 [comparison](#the-comparison) below is that diff, measured.
 

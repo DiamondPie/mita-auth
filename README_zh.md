@@ -23,8 +23,8 @@
 
 ## 开源协议
 
-计划采用 **MIT License**。核心防护逻辑公开透明，但具体项目的密钥、Redis 连接串、加密盐值等敏感配置永远通过环境变量注入，不写入本仓库。
+采用 **MIT License**，见 [LICENSE](./LICENSE)。核心防护逻辑公开透明，但具体项目的密钥、Redis 连接串、加密盐值等敏感配置永远通过环境变量注入，不写入本仓库。
 
 ---
 
-具体的技术选型、Monorepo 架构、构建/发布流程与路线图见 [temp/plan.md](./temp/plan.md)。
+每个包的 API 面、线上格式与运行时要求都记录在各自的 README 里：[core](./packages/core)、[server](./packages/server)、[client](./packages/client)、[react](./packages/react)、[vue](./packages/vue)。其背后的技术选型与架构决策以开发笔记的形式保留在工作区中，不随仓库公开。
