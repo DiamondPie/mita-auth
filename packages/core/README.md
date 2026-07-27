@@ -55,10 +55,12 @@ import { commentSchema } from '@mita-auth/core/schemas';
 
 ## Notes
 
-- **Zod is not in the main entry, deliberately.** The package is bundled one file per entry,
-  so tree-shaking inside it degrades to statement level and a single re-export would put
-  ~16 kB gzip in front of every browser that only signs proofs. Ask for `/schemas` when you
-  want the validation, and it costs nothing when you do not.
+- **Zod is not in the main entry, deliberately.** An entry point is the one boundary a
+  package can promise; how a bundler splits chunks behind it, and whether your bundler then
+  shakes the unused half back out, is an implementation detail neither side controls. Keeping
+  `/schemas` separate is therefore what puts ~16 kB gzip out of reach of a browser that only
+  signs proofs, rather than merely likely to. Ask for it when you want the validation, and it
+  costs nothing when you do not.
 - **Zero I/O by design.** `verifyDPoP` cannot detect a replay on its own: record the `jti`
   it returns for the proof's acceptance window. `@mita-auth/server` does that with Upstash
   Redis.

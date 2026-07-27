@@ -9,6 +9,8 @@ export * from './patterns';
 // first real consumer has had a chance to say whether they are the right shape.
 //
 // `./schemas` is deliberately not re-exported here. It is the only module that needs Zod,
-// and this entry is bundled as one file, so a single re-export would put ~16 kB gzip in
-// front of every browser that only ever signs a proof. Import it from
-// `@mita-auth/core/schemas` when you want the validation.
+// and a subentry is the one boundary this package can promise: whether the bundler splits a
+// chunk, and whether the consumer's own bundler then shakes the unused half back out, is not
+// something a library gets to guarantee. Keeping the two entries apart is what puts ~16 kB
+// gzip out of reach of a browser that only ever signs a proof, rather than merely likely to
+// be. Import it from `@mita-auth/core/schemas` when you want the validation.
