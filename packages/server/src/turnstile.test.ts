@@ -145,26 +145,37 @@ describe('verifyTurnstileToken', () => {
   });
 
   describe('unavailability', () => {
-    /**
-     * `internal-error` is Cloudflare's own and documented as retryable. The other three say
-     * the question was never asked: a secret key missing or wrong, or a request Cloudflare
-     * could not parse. Reporting any of them as a rejection blames the visitor for it, and
-     * looks from the outside exactly like a site everyone has started failing.
-     */
-    it.each([
-      'internal-error',
-      'missing-input-secret',
-      'invalid-input-secret',
-      'bad-request',
-    ])('treats %s as unavailable', async (code) => {
-      server.use(siteverify({ success: false, 'error-codes': [code] }));
+    // Cloudflare's own failure, documented as retryable, so it must not be reported as a
+    // visitor rejection — and it is the one unavailability that does heal on its own.
+    it('treats internal-error as unavailable without calling it a misconfiguration', async () => {
+      server.use(siteverify({ success: false, 'error-codes': ['internal-error'] }));
 
-      expect(await verify()).toMatchObject({
+      expect(await verify()).toEqual({
         success: false,
         reason: 'unavailable',
-        errorCodes: [code],
+        errorCodes: ['internal-error'],
       });
     });
+
+    /**
+     * These three say the question was never asked: a secret key missing or wrong, or a
+     * request Cloudflare could not parse. Reporting them as a rejection blames the visitor
+     * for a deployment's typo; reporting them as a plain outage lets a fail-open caller wave
+     * everyone through over one, and unlike an outage this does not heal.
+     */
+    it.each(['missing-input-secret', 'invalid-input-secret', 'bad-request'])(
+      'treats %s as a misconfiguration',
+      async (code) => {
+        server.use(siteverify({ success: false, 'error-codes': [code] }));
+
+        expect(await verify()).toEqual({
+          success: false,
+          reason: 'unavailable',
+          errorCodes: [code],
+          misconfigured: true,
+        });
+      },
+    );
 
     it.each([500, 502, 429])('treats HTTP %i as unavailable', async (status) => {
       server.use(siteverify({ success: true }, { status }));

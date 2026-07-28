@@ -124,7 +124,10 @@ review, one string to grep for before a deploy.
 - **Failure modes differ by concern, on purpose.** Rate limiting fails open (an Upstash
   outage should not take the endpoint down), Turnstile fails closed (failing open would let
   anyone who can blackhole siteverify skip the human check), and replay protection is always
-  closed and has no switch.
+  closed and has no switch. `turnstile.failureMode: 'open'` is a choice about outages and
+  covers only those: a secret key Cloudflare refuses answers 503 regardless, because it will
+  not heal on its own and failing open on it turns the human check off silently and
+  indefinitely.
 - **Turnstile is checked last, and that costs the client a nonce when it fails.** The order
   is rate limit → token present → DPoP → siteverify, so that a request destined to be retried
   never burns Cloudflare's single-use token. The trade is that anything failing *after* DPoP
@@ -144,9 +147,9 @@ review, one string to grep for before a deploy.
   response that was not JSON all look identical from the outside, and with the default
   fail-closed policy any of them takes every write down. A secret key that is missing or
   wrong arrives here too, and is the likeliest of the lot — Cloudflare never judged the
-  visitor, so calling it a rejection would have blamed them for a deployment's own typo.
-  With `failureMode: 'open'` that has a consequence worth stating plainly: a wrong secret
-  key waves every request through, silently, until `onUnavailable` is what tells you.
+  visitor, so calling it a rejection would have blamed them for a deployment's own typo. It
+  arrives carrying `misconfigured: true`, which is the one case `failureMode: 'open'` does
+  not cover.
 - **`turnstile.remoteIp` is off by default.** Cloudflare sharpens its verdict with the
   visitor's IP, but the headers it comes from are client-supplied unless a trusted proxy
   overwrites them, and a wrong IP makes the scoring worse rather than better. Turn it on

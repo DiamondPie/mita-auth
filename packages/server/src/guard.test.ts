@@ -409,8 +409,26 @@ describe('turnstile', () => {
     expect(check).toMatchObject({ success: false, reason: 'turnstile_unavailable' });
     expect(check.success || check.response.status).toBe(503);
     expect(onUnavailable).toHaveBeenCalledWith(
-      expect.objectContaining({ errorCodes: ['invalid-input-secret'] }),
+      expect.objectContaining({ errorCodes: ['invalid-input-secret'], misconfigured: true }),
     );
+  });
+
+  // `'open'` is a choice about outages: let visitors through rather than take every write
+  // down with Cloudflare. A key this deployment got wrong is not one — it does not heal, and
+  // failing open on it turns the human check off silently and indefinitely.
+  it('refuses to fail open on a misconfiguration, whatever failureMode says', async () => {
+    server.use(
+      http.post(TURNSTILE_SITEVERIFY_ENDPOINT, () =>
+        HttpResponse.json({ success: false, 'error-codes': ['invalid-input-secret'] }),
+      ),
+    );
+
+    const check = await guard({
+      turnstile: { secretKey: 'wrong', failureMode: 'open' },
+    }).verify(plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }));
+
+    expect(check).toMatchObject({ success: false, reason: 'turnstile_unavailable' });
+    expect(check.success || check.response.status).toBe(503);
   });
 
   it('can be configured to fail open instead', async () => {

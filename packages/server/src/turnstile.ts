@@ -70,6 +70,16 @@ export type TurnstileVerification =
       readonly success: false;
       readonly reason: 'unavailable';
       readonly errorCodes: readonly TurnstileErrorCode[];
+      /**
+       * `true` when siteverify refused the request itself rather than failing to answer it:
+       * a secret key missing or wrong, or a body Cloudflare could not parse.
+       *
+       * Absent otherwise, which is every outage-shaped cause — a timeout, a network error,
+       * an HTTP failure, a runtime without `AbortSignal.timeout`. The difference is that
+       * this one does not heal on its own, and a caller that fails open on outages should
+       * not fail open on it.
+       */
+      readonly misconfigured?: boolean;
       readonly cause?: unknown;
     };
 
@@ -119,17 +129,19 @@ interface SiteverifyResponse {
   metadata?: unknown;
 }
 
+/** Cloudflare's own failure, documented as retryable. It says nothing about anyone. */
+const TRANSIENT_ERROR_CODES = new Set(['internal-error']);
+
 /**
- * Error codes that say nothing about the visitor.
+ * Codes that say the question about the visitor was never asked.
  *
- * `internal-error` is Cloudflare's own, documented as retryable. The other three are ours: a
- * secret key that is missing or wrong, or a request Cloudflare could not parse, all mean the
- * question about this visitor was never asked, and `rejected` would be blaming them for it.
- * The practical difference is a 503 carrying the codes to `onUnavailable`, rather than a 403
- * indistinguishable from a site where every visitor has suddenly started failing.
+ * A secret key missing or wrong, or a request Cloudflare could not parse, are all this
+ * deployment's own doing. Reporting them as a rejection blamed the visitor for a typo and
+ * looked exactly like a site everyone had suddenly started failing; reporting them as a
+ * plain outage would let a fail-open caller wave every request through over one, forever,
+ * since unlike an outage this does not heal.
  */
-const UNAVAILABLE_ERROR_CODES = new Set([
-  'internal-error',
+const MISCONFIGURED_ERROR_CODES = new Set([
   'missing-input-secret',
   'invalid-input-secret',
   'bad-request',
@@ -218,7 +230,11 @@ export async function verifyTurnstileToken(
   if (payload.success !== true) {
     const errorCodes = readErrorCodes(payload);
 
-    return errorCodes.some((code) => UNAVAILABLE_ERROR_CODES.has(code))
+    if (errorCodes.some((code) => MISCONFIGURED_ERROR_CODES.has(code))) {
+      return { success: false, reason: 'unavailable', errorCodes, misconfigured: true };
+    }
+
+    return errorCodes.some((code) => TRANSIENT_ERROR_CODES.has(code))
       ? { success: false, reason: 'unavailable', errorCodes }
       : { success: false, reason: 'rejected', errorCodes, challenge };
   }

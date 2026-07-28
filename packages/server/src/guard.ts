@@ -107,6 +107,10 @@ export interface GuardTurnstileOptions {
    * Defaults to `'closed'`. Failing open would let anyone who can blackhole siteverify
    * skip the human check entirely, which is an exploitable path rather than a mere
    * degradation.
+   *
+   * `'open'` covers outages only. A secret key Cloudflare refuses is answered with a 503
+   * either way: it is this deployment's own fault, it does not heal, and waving every
+   * request through until someone notices is not what anyone asks for by choosing `'open'`.
    */
   failureMode?: GuardFailureMode;
   /**
@@ -539,6 +543,21 @@ async function runTurnstile(
   // Everything that made this unknowable is in `result`, and the 503 below carries none of
   // it. Handing it over here is the only place a deployment can learn the difference.
   options.onUnavailable?.(result);
+
+  // `failureMode: 'open'` is a statement about outages: if Turnstile cannot be reached, let
+  // visitors through rather than take every write down with it. A secret key this deployment
+  // got wrong is not an outage — it will not heal on its own, and failing open on it means
+  // the human check is silently off for as long as nobody reads `onUnavailable`. Nobody
+  // chooses that when they choose `'open'`, so it is not on offer.
+  if (result.misconfigured === true) {
+    return {
+      failure: failure(
+        'turnstile_unavailable',
+        unavailableResponse('turnstile_unavailable'),
+        pending,
+      ),
+    };
+  }
 
   return (options.failureMode ?? 'closed') === 'open'
     ? { failure: null }
