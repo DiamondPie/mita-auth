@@ -1,6 +1,6 @@
 {
   "name": "@mita-auth/vue",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Thin Vue 3 bindings (useStore) over @mita-auth/client's nanostores state.",
   "license": "MIT",
   "keywords": [
@@ -22,7 +22,9 @@
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
   "sideEffects": false,
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": {
