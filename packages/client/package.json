@@ -1,6 +1,6 @@
 {
   "name": "@mita-auth/client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Browser client: protected fetch (ky), reactive auth state (nanostores), <mita-turnstile> web component.",
   "license": "MIT",
   "keywords": [
@@ -23,8 +23,13 @@
   },
   "author": "DiamondPie <thelostdiamondpie@outlook.com>",
   "type": "module",
-  "sideEffects": ["./dist/turnstile.mjs", "./dist/turnstile.cjs"],
-  "files": ["dist"],
+  "sideEffects": [
+    "./dist/turnstile.mjs",
+    "./dist/turnstile.cjs"
+  ],
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": {
@@ -53,7 +58,9 @@
   "types": "./dist/index.d.cts",
   "typesVersions": {
     "*": {
-      "turnstile": ["./dist/turnstile.d.cts"]
+      "turnstile": [
+        "./dist/turnstile.d.cts"
+      ]
     }
   },
   "publishConfig": {
