@@ -177,6 +177,52 @@ describe('verifyTurnstileToken', () => {
       },
     );
 
+    // The shape Cloudflare actually answers with: a bad key is a 400, not a 200 carrying
+    // `invalid-input-secret`. Classifying only after `response.ok` left the branch above
+    // unreachable against the real endpoint, so the likeliest misconfiguration of all came
+    // back as a plain outage that `failureMode: 'open'` was free to wave through.
+    it.each(['missing-input-secret', 'invalid-input-secret'])(
+      'reads %s out of the 400 it arrives on',
+      async (code) => {
+        server.use(siteverify({ success: false, 'error-codes': [code] }, { status: 400 }));
+
+        expect(await verify()).toEqual({
+          success: false,
+          reason: 'unavailable',
+          errorCodes: ['mita.http_error', code],
+          misconfigured: true,
+        });
+      },
+    );
+
+    // Reading the body of a non-2xx must not turn into a verdict about the visitor: whatever
+    // the codes say, nothing was judged.
+    it('never lets a non-2xx become a rejection', async () => {
+      server.use(
+        siteverify({ success: false, 'error-codes': ['invalid-input-response'] }, { status: 400 }),
+      );
+
+      expect(await verify()).toEqual({
+        success: false,
+        reason: 'unavailable',
+        errorCodes: ['mita.http_error', 'invalid-input-response'],
+      });
+    });
+
+    it('reports a failing body it cannot parse as the HTTP error alone', async () => {
+      server.use(
+        http.post(TURNSTILE_SITEVERIFY_ENDPOINT, () =>
+          HttpResponse.text('<html>Bad Gateway</html>', { status: 502 }),
+        ),
+      );
+
+      expect(await verify()).toEqual({
+        success: false,
+        reason: 'unavailable',
+        errorCodes: ['mita.http_error'],
+      });
+    });
+
     it.each([500, 502, 429])('treats HTTP %i as unavailable', async (status) => {
       server.use(siteverify({ success: true }, { status }));
 

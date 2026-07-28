@@ -394,10 +394,12 @@ describe('turnstile', () => {
 
   // The likeliest failure of all, and the one that used to be indistinguishable from a site
   // where every visitor had suddenly started failing the challenge.
+  // The 400 is the point: that is the status Cloudflare answers a refused key with, and both
+  // of these used to pass against a 200 the endpoint never sends.
   it('answers a secret key Cloudflare refuses with a 503, not a 403', async () => {
     server.use(
       http.post(TURNSTILE_SITEVERIFY_ENDPOINT, () =>
-        HttpResponse.json({ success: false, 'error-codes': ['invalid-input-secret'] }),
+        HttpResponse.json({ success: false, 'error-codes': ['invalid-input-secret'] }, { status: 400 }),
       ),
     );
     const onUnavailable = vi.fn();
@@ -409,7 +411,10 @@ describe('turnstile', () => {
     expect(check).toMatchObject({ success: false, reason: 'turnstile_unavailable' });
     expect(check.success || check.response.status).toBe(503);
     expect(onUnavailable).toHaveBeenCalledWith(
-      expect.objectContaining({ errorCodes: ['invalid-input-secret'], misconfigured: true }),
+      expect.objectContaining({
+        errorCodes: ['mita.http_error', 'invalid-input-secret'],
+        misconfigured: true,
+      }),
     );
   });
 
@@ -419,7 +424,7 @@ describe('turnstile', () => {
   it('refuses to fail open on a misconfiguration, whatever failureMode says', async () => {
     server.use(
       http.post(TURNSTILE_SITEVERIFY_ENDPOINT, () =>
-        HttpResponse.json({ success: false, 'error-codes': ['invalid-input-secret'] }),
+        HttpResponse.json({ success: false, 'error-codes': ['invalid-input-secret'] }, { status: 400 }),
       ),
     );
 

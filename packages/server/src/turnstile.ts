@@ -210,7 +210,19 @@ export async function verifyTurnstileToken(
   }
 
   if (!response.ok) {
-    return { success: false, reason: 'unavailable', errorCodes: ['mita.http_error'] };
+    // Cloudflare answers a missing or invalid secret with a 400 carrying the reason in the
+    // body, so the body is read before giving up: a key this deployment got wrong is both the
+    // likeliest cause of a non-2xx and the one cause `failureMode` must not be allowed to wave
+    // through, and reading `error-codes` only after `response.ok` left it unreachable. A
+    // non-2xx never judges the visitor, so a code about them can only add detail to an outage.
+    const errorCodes: readonly TurnstileErrorCode[] = [
+      'mita.http_error',
+      ...(await readHttpErrorCodes(response)),
+    ];
+
+    return errorCodes.some((code) => MISCONFIGURED_ERROR_CODES.has(code))
+      ? { success: false, reason: 'unavailable', errorCodes, misconfigured: true }
+      : { success: false, reason: 'unavailable', errorCodes };
   }
 
   let payload: SiteverifyResponse;
@@ -322,6 +334,22 @@ function runLocalChecks(
   }
 
   return now - solvedAt > maxAgeSeconds * 1000 ? 'mita.expired' : null;
+}
+
+/**
+ * Codes out of a failing response's body, or none when it carried none.
+ *
+ * Anything that is not a siteverify body yields none of them, by returning nothing for a
+ * scalar or by throwing inside the `try` for `null` — a body that will not parse needs no code
+ * of its own here, since `mita.http_error` already says the request failed and a proxy's HTML
+ * error page has nothing to add to that.
+ */
+async function readHttpErrorCodes(response: Response): Promise<readonly TurnstileErrorCode[]> {
+  try {
+    return readErrorCodes((await response.json()) as SiteverifyResponse);
+  } catch {
+    return [];
+  }
 }
 
 function readErrorCodes(payload: SiteverifyResponse): readonly TurnstileErrorCode[] {
