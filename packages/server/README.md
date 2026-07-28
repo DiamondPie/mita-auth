@@ -108,7 +108,9 @@ review, one string to grep for before a deploy.
   | nginx / Traefik / ALB | whichever header you overwrite — and check that it *overwrites* rather than appends |
   | Bare Node, no proxy | none of them work; pass `rateLimit.identifier` derived from something you can verify |
 
-  Named, it is the only header consulted and its value is taken whole; if it is absent the
+  Named, it is the only header consulted and its value is taken whole — a comma in a header
+  you control is data, not a chain. If it is absent, empty, or longer than
+  `MAX_CLIENT_IP_LENGTH`, which a forwarding chain of two IPv6 addresses already is, the
   request falls to the shared bucket rather than back to the guess. It applies to
   `turnstile.remoteIp` as well, which asks the same question of the same request.
 
