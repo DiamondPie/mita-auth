@@ -38,15 +38,22 @@ describe('generateNonce', () => {
     expect(generateNonce({ bytes: MAX_NONCE_BYTES })).toHaveLength(base64urlLength(MAX_NONCE_BYTES));
   });
 
-  it('produces unique values across a large sample', () => {
-    const samples = new Set<string>();
+  // Half a second locally, but it shares a runner with the rest of the release gate. How
+  // long the sample takes to draw is not what this asserts, so it gets room rather than a
+  // smaller sample.
+  it(
+    'produces unique values across a large sample',
+    () => {
+      const samples = new Set<string>();
 
-    for (let index = 0; index < 100_000; index += 1) {
-      samples.add(generateNonce());
-    }
+      for (let index = 0; index < 100_000; index += 1) {
+        samples.add(generateNonce());
+      }
 
-    expect(samples.size).toBe(100_000);
-  });
+      expect(samples.size).toBe(100_000);
+    },
+    30_000,
+  );
 
   const invalidSizes: [label: string, bytes: number][] = [
     ['below the minimum', MIN_NONCE_BYTES - 1],
