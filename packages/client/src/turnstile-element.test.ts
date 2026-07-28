@@ -178,14 +178,14 @@ describe('<mita-turnstile>', () => {
     expect($turnstileStatus.get()).toBe('pending');
   });
 
-  // Nothing on screen can clear a spent challenge once the widget is gone, and every later
-  // request would be sent without a token.
-  it('clears a spent challenge it has no widget left to reset', async () => {
+  // A render that produced no widget still leaves the element on screen, and `reset()` is
+  // public. Clearing the challenge is the only thing left for it to do.
+  it('clears the challenge when asked to reset a widget that never rendered', async () => {
+    widgetId = undefined;
     const element = await mount();
-    options().callback?.('token-1');
-    element.remove();
 
-    expect(consumeTurnstileToken()).toBe('token-1');
+    expect($turnstileStatus.get()).toBe('error');
+
     element.reset();
 
     expect(api.reset).not.toHaveBeenCalled();
@@ -229,6 +229,37 @@ describe('<mita-turnstile>', () => {
     consumeTurnstileToken();
 
     expect(api.reset).not.toHaveBeenCalled();
+  });
+
+  // Detaching used to leave whatever the widget was last saying on record, with the only
+  // thing able to clear it — the listener — unsubscribed one line earlier.
+  it('leaves no status describing a widget that is gone', async () => {
+    const element = await mount();
+    options().callback?.('token-1');
+    consumeTurnstileToken();
+
+    expect($turnstileStatus.get()).toBe('pending');
+
+    element.remove();
+
+    expect($turnstileStatus.get()).toBe('idle');
+  });
+
+  // The whole chain: a stranded `spent` was unrecoverable, because the element that could
+  // have reset it was the one that had just gone away.
+  it('lets a widget mounted later solve a challenge of its own', async () => {
+    const first = await mount();
+    options().callback?.('token-1');
+    first.remove();
+
+    // The token belonged to a widget that no longer exists; nothing is left to send.
+    expect(consumeTurnstileToken()).toBeNull();
+
+    await mount();
+    options().callback?.('token-2');
+
+    expect($turnstileStatus.get()).toBe('solved');
+    expect($turnstileToken.get()).toBe('token-2');
   });
 
   it('reports a missing site key rather than rendering', async () => {

@@ -96,9 +96,16 @@ export class MitaTurnstileElement extends ElementBase {
   }
 
   disconnectedCallback(): void {
+    // Unsubscribing first: the reset below writes to the same store this listener watches,
+    // and a `spent` status arriving here would call back into a widget already being torn
+    // down.
     this.#unlisten?.();
     this.#unlisten = undefined;
     this.#destroyWidget();
+    // Every status but `idle` describes a widget that no longer exists, and nothing left on
+    // screen could clear it. A solved token goes with it: `remove()` above already orphaned
+    // the challenge it came from.
+    resetTurnstileChallenge();
   }
 
   attributeChangedCallback(_name: string, previous: string | null, next: string | null): void {
