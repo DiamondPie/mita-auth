@@ -115,7 +115,12 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
   /** Tail of the chain every attempt queues behind. See {@link attempt}. */
   let queue: Promise<unknown> = Promise.resolve();
 
-  /** Attempts queued or in flight, and how long the last completed round trip took. */
+  /**
+   * Attempts queued or in flight, and how long the last completed round trip took.
+   *
+   * The depth is read only to tell "I waited behind something" from "I was next anyway";
+   * how long the wait actually was is measured rather than derived from it.
+   */
   let queueDepth = 0;
   let lastRtt: number | undefined;
 
@@ -161,7 +166,8 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
    * The one cost of queueing is that ky's timer is already running while an attempt waits, so
    * a burst deep enough to outlast `timeout` would have its tail rejected as timed out —
    * without a status code, without `onUnauthorized`, and without ever reaching the server.
-   * Attempts that can be seen to be in that position up front are refused instead.
+   * An attempt that has reached the front of the queue with too little of its budget left is
+   * refused with a diagnosable error instead.
    *
    * `budget` and `send` are bound per call by the init hook rather than read from the
    * instance: both are options ky lets a single call override, and this runs on behalf of
@@ -173,27 +179,38 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
     budget: number | undefined,
     send: NonNullable<Options['fetch']>,
   ): Promise<Response> => {
-    // Only armed once a round trip has been observed, and only against a queue with
-    // something in it. A request that queues behind nothing is not a queueing problem:
-    // whatever `lastRtt` says, it has the whole budget to itself, and ky's own timer is the
-    // honest judge of whether that is enough. Refusing it here could only ever be wrong.
-    if (
-      budget !== undefined &&
-      lastRtt !== undefined &&
-      queueDepth > 0 &&
-      (queueDepth + 1) * lastRtt > budget
-    ) {
-      // Refused before joining the queue, so it does not deepen the saturation it reports.
-      // Rejecting rather than throwing also lets ky clear the timer it armed for this attempt.
-      return Promise.reject(
-        new MitaError(
-          'client.queue_saturated',
-          `This client already has ${queueDepth} request(s) queued at about ${lastRtt} ms each, which leaves no room for another inside the ${budget} ms timeout. Requests on one instance are sent one at a time and share that budget, so raise \`timeout\`, send fewer at once, or split the burst across separate clients.`,
-        ),
-      );
-    }
+    /** Whether anything was already in the queue when this attempt joined it. */
+    const queuedBehind = queueDepth > 0;
+    const queuedAt = Date.now();
 
     const run = async (): Promise<Response> => {
+      const waited = Date.now() - queuedAt;
+
+      // Judged here, at the front of the queue, rather than on arrival — because here both
+      // numbers are real. `lastRtt` has just been refreshed by the attempt in front, and the
+      // wait is measured rather than extrapolated from a queue depth. Judged on arrival, a
+      // burst that starts together reads one sample and multiplies it by a depth none of them
+      // will actually wait out: four calls after a 3 s cold start were refused against 12 s
+      // of predicted queueing that in reality cost 400 ms.
+      //
+      // `queuedBehind` is what keeps a request that queued behind nothing out of this: with
+      // the whole budget still intact, ky's own timer is the honest judge of whether one
+      // round trip fits inside it, and a single stale sample is not.
+      if (
+        budget !== undefined &&
+        lastRtt !== undefined &&
+        queuedBehind &&
+        waited + lastRtt > budget
+      ) {
+        // Thrown from inside the queue rather than in place of joining it: the refusal costs
+        // no round trip, so the attempts behind it advance immediately. ky sees a rejected
+        // `fetch` either way and clears the timer it armed.
+        throw new MitaError(
+          'client.queue_saturated',
+          `This request waited ${waited} ms for its turn on a client whose last round trip took ${lastRtt} ms, which leaves no room inside the ${budget} ms timeout it was given. Requests on one instance are sent one at a time and share that budget, so raise \`timeout\`, send fewer at once, or split the burst across separate clients.`,
+        );
+      }
+
       request.headers.set(
         MITA_HEADERS.dpop,
         await signDPoP(await resolveKeyPair(), {

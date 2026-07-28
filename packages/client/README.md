@@ -89,12 +89,14 @@ people should reach**.
   against the same `timeout` as the round trip. With ky's 10 s default, the `⌊10000 / RTT⌋`th
   concurrent call is where that budget runs out. Raise `timeout` in proportion to how deep
   your bursts get — per call or for the whole instance, both are honoured — or give
-  independent bursts their own client. An attempt that can be seen up front not to fit is
-  rejected with a `MitaError` whose code is `client.queue_saturated`, rather than being sent
-  and reported as a timeout it never had a chance to beat. The budget weighed is
-  `min(timeout, totalTimeout)`, since ky charges an attempt against both, and a request with
-  nothing ahead of it is never refused this way — it has the whole budget, and ky's own
-  timer is the judge of that.
+  independent bursts their own client. An attempt that reaches the front of the queue having
+  spent more of its budget waiting than a round trip has left to cost is rejected with a
+  `MitaError` whose code is `client.queue_saturated`, rather than being sent and reported as
+  a timeout it never had a chance to beat. The wait is measured rather than predicted from
+  how many calls are in flight, so a burst that turns out to be fast is not refused on the
+  strength of one slow sample; the budget weighed is `min(timeout, totalTimeout)`, since ky
+  charges an attempt against both. A request with nothing ahead of it is never refused this
+  way — it has the whole budget, and ky's own timer is the judge of that.
 - **One Turnstile token per submission.** Sending it spends it; the widget watches for that
   and asks the visitor's browser for a fresh challenge without being told. This happens when
   the request goes out, not when it succeeds, so a rejection the server made *before*

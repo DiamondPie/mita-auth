@@ -139,6 +139,21 @@ function slowNetwork() {
   });
 }
 
+/**
+ * One slow round trip and then a warm connection — the shape that makes a single sample so
+ * misleading, since the burst behind it costs a fraction of what it did.
+ */
+function coldStartNetwork() {
+  let issued = 0;
+
+  return vi.fn(async () => {
+    issued += 1;
+    await new Promise((resolve) => setTimeout(resolve, issued === 1 ? SLOW_RTT_MS : 0));
+
+    return accepted(`nonce-${issued}`);
+  });
+}
+
 describe('createProtectedClient', () => {
   it('rejects a nonsensical retry limit', () => {
     expect(() => createProtectedClient({ nonceRetryLimit: -1 })).toThrow(
@@ -404,13 +419,7 @@ describe('createProtectedClient', () => {
     // request that queues behind nothing against it refuses a request the budget may well
     // have covered — and ky's timer is right there to decide that honestly.
     it('sends a request that queues behind nothing, however slow the last one was', async () => {
-      let issued = 0;
-      const network = vi.fn(async () => {
-        issued += 1;
-        await new Promise((resolve) => setTimeout(resolve, issued === 1 ? SLOW_RTT_MS : 0));
-
-        return accepted(`nonce-${issued}`);
-      });
+      const network = coldStartNetwork();
       const api = client({ fetch: network });
 
       // One slow round trip on record, and now a budget narrower than it.
@@ -420,6 +429,46 @@ describe('createProtectedClient', () => {
         status: 200,
       });
       expect(network).toHaveBeenCalledTimes(2);
+    });
+
+    /**
+     * The reason the check moved to the front of the queue. Judged on arrival, a burst that
+     * starts together all reads the cold start's sample and multiplies it by a depth none of
+     * them will wait out — here `3 × 120 > 200` would have refused the tail of a burst whose
+     * real cost is a few milliseconds a piece.
+     */
+    it('does not hold a burst against how slow the cold start was', async () => {
+      const network = coldStartNetwork();
+      const api = client({ timeout: SATURATED_TIMEOUT_MS, fetch: network });
+
+      await api.post(API_URL);
+
+      const responses = await Promise.all([
+        api.post(API_URL),
+        api.post(API_URL),
+        api.post(API_URL),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+      expect(network).toHaveBeenCalledTimes(4);
+    });
+
+    // The wait is measured, so a request refused is one that provably ran out of budget
+    // sitting in line rather than one predicted to.
+    it('reports what it actually waited for', async () => {
+      const api = client({ timeout: SATURATED_TIMEOUT_MS, fetch: slowNetwork() });
+
+      await api.post(API_URL);
+
+      const [, second] = await Promise.allSettled([api.post(API_URL), api.post(API_URL)]);
+
+      expect(second).toMatchObject({
+        status: 'rejected',
+        reason: expect.objectContaining({
+          code: 'client.queue_saturated',
+          message: expect.stringContaining('waited'),
+        }),
+      });
     });
 
     // ky cuts every attempt at `min(timeout, what is left of totalTimeout)`. Reading only
