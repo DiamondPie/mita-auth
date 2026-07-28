@@ -88,13 +88,14 @@ export interface GuardTurnstileOptions {
   required?: boolean;
   /**
    * Forward the visitor's IP to siteverify as `remoteip`, which Cloudflare uses to sharpen
-   * its verdict. `true` reads it with {@link resolveClientIp}; a function derives it some
-   * other way.
+   * its verdict. `true` reads it with {@link resolveClientIp}, honouring
+   * {@link CreateSecurityGuardOptions.clientIpHeader}; a function derives it some other way.
    *
    * Off by default, and deliberately: the headers `resolveClientIp` reads are client-supplied
-   * unless a trusted proxy overwrites them. Behind Cloudflare or Vercel that is guaranteed
-   * and this is worth turning on; on a bare Node server it would hand Cloudflare a value the
-   * visitor chose, and a wrong IP makes the scoring worse rather than better.
+   * unless a trusted proxy overwrites them, and a wrong IP makes the scoring worse rather
+   * than better. Turn it on once `clientIpHeader` names the header this platform sets —
+   * without it the header order is a guess, and handing Cloudflare a value the visitor chose
+   * is what that guess costs when it is wrong.
    */
   remoteIp?: boolean | ((request: Request) => string | null | undefined);
   allowedHostnames?: readonly string[];

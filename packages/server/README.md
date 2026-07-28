@@ -91,18 +91,28 @@ review, one string to grep for before a deploy.
   request — two round trips and two rate-limit tokens instead of one, with nothing in the
   logs to say why. Returning a validation error without the headers is the easiest way to
   cause it.
-- **The default rate-limit identifier is the client IP, read from headers the client can
-  set.** `resolveClientIp` tries `cf-connecting-ip`, `x-real-ip` and `x-forwarded-for`, none
-  of which are trustworthy unless a proxy you control overwrites them. Behind Cloudflare or
-  Vercel that holds. On a bare Node server it does not: a visitor sending a new
-  `X-Forwarded-For` per request gets a fresh bucket every time, which is a rate limit in name
-  only. Strip and rewrite those headers at the edge, or pass your own `rateLimit.identifier`
-  derived from something you can verify.
-- **With no such header present at all, every request shares one bucket.** Requests the
+- **Name the header your platform actually controls.** The default rate-limit identifier is
+  the client IP, and without `clientIpHeader` it is a guess: `resolveClientIp` tries
+  `cf-connecting-ip`, `x-real-ip` and `x-forwarded-for` in that order, and a fixed order
+  cannot know which one *your* proxy is the one overwriting. Anywhere but Cloudflare it lets
+  a header the visitor set win over the one the platform set, and a visitor sending a new
+  one per request gets a fresh bucket every time — a rate limit in name only.
+
+  | Deployment | `clientIpHeader` |
+  | --- | --- |
+  | Cloudflare Workers / proxy | `'cf-connecting-ip'` |
+  | Vercel | `'x-real-ip'` |
+  | nginx / Traefik / ALB | whichever header you overwrite — and check that it *overwrites* rather than appends |
+  | Bare Node, no proxy | none of them work; pass `rateLimit.identifier` derived from something you can verify |
+
+  Named, it is the only header consulted and its value is taken whole; if it is absent the
+  request falls to the shared bucket rather than back to the guess. It applies to
+  `turnstile.remoteIp` as well, which asks the same question of the same request.
+- **With no usable header present at all, every request shares one bucket.** Requests the
   identifier cannot place fall back to a single shared key, deliberately — failing open per
   visitor would be worse. But on an un-proxied deployment *no* request carries an IP header,
   so the whole site shares one `requests: 10, window: '1 m'` budget and the sixth visitor of
-  the minute gets a 429. The two fixes are the same two above.
+  the minute gets a 429. The fixes are the ones in the table above.
 - **Failure modes differ by concern, on purpose.** Rate limiting fails open (an Upstash
   outage should not take the endpoint down), Turnstile fails closed (failing open would let
   anyone who can blackhole siteverify skip the human check), and replay protection is always
@@ -127,8 +137,9 @@ review, one string to grep for before a deploy.
   fail-closed policy any of them takes every write down.
 - **`turnstile.remoteIp` is off by default.** Cloudflare sharpens its verdict with the
   visitor's IP, but the headers it comes from are client-supplied unless a trusted proxy
-  overwrites them. Behind Cloudflare or Vercel, turn it on; on a bare Node server it would
-  forward a value the visitor chose.
+  overwrites them, and a wrong IP makes the scoring worse rather than better. Turn it on
+  once `clientIpHeader` names the header your platform sets — the table above is the same
+  answer for both. On a bare Node server with no proxy, leave it off.
 - Web-standard APIs only, compiled against the WebWorker lib with `types: []`. Runs on Node,
   Vercel Edge and Cloudflare Workers.
 
