@@ -234,6 +234,7 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
       ...(clientIpHeader === undefined ? {} : { clientIpHeader }),
       ...rateLimit,
     });
+
   let replayStoreInstance: ReplayStore | undefined;
 
   /**
