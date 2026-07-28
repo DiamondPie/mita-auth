@@ -24,6 +24,21 @@ export const UNIDENTIFIED_RATE_LIMIT_KEY = 'mita:unidentified';
  */
 export const CLIENT_IP_HEADERS = ['cf-connecting-ip', 'x-real-ip', 'x-forwarded-for'] as const;
 
+/**
+ * Ceiling for an IP read out of a header. The longest legitimate value is an IPv6 address
+ * with a zone id, at 45 characters.
+ *
+ * Without it a forged header is cheap amplification: every distinct value becomes its own
+ * Redis key carrying the window's TTL, and the runtime's own header limit — around 16 KB —
+ * is the only bound on how big each of them gets. It applies to a named `clientIpHeader`
+ * too: naming a header says a proxy overwrites it, and a proxy that turned out not to is
+ * exactly the case worth surviving.
+ *
+ * It bounds nothing a caller supplies through `identifier`. That value is theirs, and a
+ * library that truncated it would be corrupting a key rather than protecting anything.
+ */
+export const MAX_CLIENT_IP_LENGTH = 64;
+
 /** What to do when the limiter cannot reach a verdict. */
 export type RateLimitFailureMode = 'open' | 'closed';
 
@@ -102,12 +117,10 @@ export interface RateLimiter {
  */
 export function resolveClientIp(request: Request, header?: string): string | null {
   if (header !== undefined) {
-    const value = request.headers.get(header)?.trim();
-
     // Not falling back to the list: a deployment that named a header and did not get it is
     // one whose proxy is misconfigured, and guessing would hide that behind a header the
     // visitor is free to set.
-    return value === undefined || value.length === 0 ? null : value;
+    return usableIp(request.headers.get(header)?.trim());
   }
 
   for (const name of CLIENT_IP_HEADERS) {
@@ -121,14 +134,23 @@ export function resolveClientIp(request: Request, header?: string): string | nul
     // proxy in front overwrites the header; a proxy that appends — which nginx's own
     // `$proxy_add_x_forwarded_for` example does — leaves whatever the client sent sitting
     // there, and this reads that instead.
-    const candidate = value.split(',')[0]?.trim();
+    const candidate = usableIp(value.split(',')[0]?.trim());
 
-    if (candidate !== undefined && candidate.length > 0) {
+    // Falling through rather than returning `null`: an unusable value is treated as absent,
+    // so a forged `CF-Connecting-IP` does not also suppress a real `X-Real-Ip` behind it.
+    if (candidate !== null) {
       return candidate;
     }
   }
 
   return null;
+}
+
+/** `null` for anything that cannot be a client IP: absent, empty, or beyond the ceiling. */
+function usableIp(value: string | undefined): string | null {
+  return value === undefined || value.length === 0 || value.length > MAX_CLIENT_IP_LENGTH
+    ? null
+    : value;
 }
 
 /**

@@ -4,6 +4,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  MAX_CLIENT_IP_LENGTH,
   UNIDENTIFIED_RATE_LIMIT_KEY,
   createRateLimiter,
   resolveClientIp,
@@ -83,6 +84,37 @@ describe('resolveClientIp', () => {
 
   it('returns null when no proxy header is present', () => {
     expect(resolveClientIp(request())).toBeNull();
+  });
+
+  // Every distinct value becomes its own Redis key with the window's TTL on it, and only the
+  // runtime's ~16 KB header limit bounds how big a forged one gets.
+  describe('over-long values', () => {
+    const overLong = 'a'.repeat(MAX_CLIENT_IP_LENGTH + 1);
+
+    it('treats one as absent', () => {
+      expect(resolveClientIp(request({ 'cf-connecting-ip': overLong }))).toBeNull();
+    });
+
+    // Skipping rather than giving up: a forged header must not also suppress the real one
+    // sitting behind it.
+    it('falls through to the next header rather than giving up', () => {
+      const headers = { 'cf-connecting-ip': overLong, 'x-real-ip': '198.51.100.2' };
+
+      expect(resolveClientIp(request(headers))).toBe('198.51.100.2');
+    });
+
+    // A named header says a proxy overwrites it; a proxy that turned out not to is the case
+    // this ceiling exists for.
+    it('applies to a named header too', () => {
+      expect(resolveClientIp(request({ 'x-real-ip': overLong }), 'x-real-ip')).toBeNull();
+    });
+
+    it('admits the longest address that is actually legitimate', () => {
+      const ipv6 = 'fe80:0000:0000:0000:0202:b3ff:fe1e:8329%eth0';
+
+      expect(ipv6.length).toBeLessThanOrEqual(MAX_CLIENT_IP_LENGTH);
+      expect(resolveClientIp(request({ 'x-real-ip': ipv6 }))).toBe(ipv6);
+    });
   });
 
   describe('with a named header', () => {
