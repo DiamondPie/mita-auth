@@ -4,7 +4,8 @@ Framework-agnostic core of [Mita](https://github.com/DiamondPie/mita-auth): DPoP
 verification (RFC 9449), nonce generation, and the Zod schemas both halves of the wire
 protocol share.
 
-> 🚧 In development. Nothing is published to npm yet, and the public API may still change.
+> 🚧 0.x — the public API may still change between minor releases. Pin a minor range if that
+> matters to you.
 
 Most projects do not depend on this package directly — `@mita-auth/client` and
 `@mita-auth/server` both re-use it and pull it in themselves. Reach for it when you are

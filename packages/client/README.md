@@ -4,7 +4,8 @@ Browser half of [Mita](https://github.com/DiamondPie/mita-auth): a `ky` instance
 every request with a DPoP proof, reactive state built on nanostores, and the
 `<mita-turnstile>` custom element.
 
-> 🚧 In development. Nothing is published to npm yet, and the public API may still change.
+> 🚧 0.x — the public API may still change between minor releases. Pin a minor range if that
+> matters to you.
 
 Framework-agnostic on purpose — React and Vue bindings live in
 [`@mita-auth/react`](https://github.com/DiamondPie/mita-auth/tree/main/packages/react) and

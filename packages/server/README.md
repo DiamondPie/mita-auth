@@ -4,7 +4,8 @@ Server half of [Mita](https://github.com/DiamondPie/mita-auth): rate limiting, C
 Turnstile verification, DPoP replay protection, and HTML escaping — behind one `verify()`
 call that takes a `Request` and hands back either a pass or the `Response` to return.
 
-> 🚧 In development. Nothing is published to npm yet, and the public API may still change.
+> 🚧 0.x — the public API may still change between minor releases. Pin a minor range if that
+> matters to you.
 
 ## Install
 
