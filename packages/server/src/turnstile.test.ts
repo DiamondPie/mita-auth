@@ -118,7 +118,9 @@ describe('verifyTurnstileToken', () => {
   });
 
   describe('rejections', () => {
-    it.each(['invalid-input-response', 'timeout-or-duplicate', 'bad-request', 'invalid-input-secret'])(
+    // The three that are genuinely about the visitor: a token missing, malformed, or already
+    // spent. Everything else siteverify can say is about us.
+    it.each(['missing-input-response', 'invalid-input-response', 'timeout-or-duplicate'])(
       'reports %s as a rejection',
       async (code) => {
         server.use(siteverify({ success: false, 'error-codes': [code] }));
@@ -136,19 +138,32 @@ describe('verifyTurnstileToken', () => {
     });
 
     it('drops non-string entries from error-codes', async () => {
-      server.use(siteverify({ success: false, 'error-codes': ['bad-request', 7, null] }));
+      server.use(siteverify({ success: false, 'error-codes': ['invalid-input-response', 7, null] }));
 
-      expect(await verify()).toMatchObject({ errorCodes: ['bad-request'] });
+      expect(await verify()).toMatchObject({ errorCodes: ['invalid-input-response'] });
     });
   });
 
   describe('unavailability', () => {
-    // internal-error is Cloudflare's own failure and documented as retryable, so it must
-    // not be reported as a visitor rejection.
-    it('treats internal-error as unavailable', async () => {
-      server.use(siteverify({ success: false, 'error-codes': ['internal-error'] }));
+    /**
+     * `internal-error` is Cloudflare's own and documented as retryable. The other three say
+     * the question was never asked: a secret key missing or wrong, or a request Cloudflare
+     * could not parse. Reporting any of them as a rejection blames the visitor for it, and
+     * looks from the outside exactly like a site everyone has started failing.
+     */
+    it.each([
+      'internal-error',
+      'missing-input-secret',
+      'invalid-input-secret',
+      'bad-request',
+    ])('treats %s as unavailable', async (code) => {
+      server.use(siteverify({ success: false, 'error-codes': [code] }));
 
-      expect(await verify()).toMatchObject({ success: false, reason: 'unavailable' });
+      expect(await verify()).toMatchObject({
+        success: false,
+        reason: 'unavailable',
+        errorCodes: [code],
+      });
     });
 
     it.each([500, 502, 429])('treats HTTP %i as unavailable', async (status) => {

@@ -134,7 +134,11 @@ review, one string to grep for before a deploy.
 - **A 503 says `turnstile_unavailable` and nothing else.** Pass `turnstile.onUnavailable` to
   learn which one it was: a Cloudflare outage, a runtime without `AbortSignal.timeout`, and a
   response that was not JSON all look identical from the outside, and with the default
-  fail-closed policy any of them takes every write down.
+  fail-closed policy any of them takes every write down. A secret key that is missing or
+  wrong arrives here too, and is the likeliest of the lot — Cloudflare never judged the
+  visitor, so calling it a rejection would have blamed them for a deployment's own typo.
+  With `failureMode: 'open'` that has a consequence worth stating plainly: a wrong secret
+  key waves every request through, silently, until `onUnavailable` is what tells you.
 - **`turnstile.remoteIp` is off by default.** Cloudflare sharpens its verdict with the
   visitor's IP, but the headers it comes from are client-supplied unless a trusted proxy
   overwrites them, and a wrong IP makes the scoring worse rather than better. Turn it on

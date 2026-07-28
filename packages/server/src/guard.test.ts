@@ -375,6 +375,27 @@ describe('turnstile', () => {
     );
   });
 
+  // The likeliest failure of all, and the one that used to be indistinguishable from a site
+  // where every visitor had suddenly started failing the challenge.
+  it('answers a secret key Cloudflare refuses with a 503, not a 403', async () => {
+    server.use(
+      http.post(TURNSTILE_SITEVERIFY_ENDPOINT, () =>
+        HttpResponse.json({ success: false, 'error-codes': ['invalid-input-secret'] }),
+      ),
+    );
+    const onUnavailable = vi.fn();
+
+    const check = await guard({ turnstile: { secretKey: 'wrong', onUnavailable } }).verify(
+      plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }),
+    );
+
+    expect(check).toMatchObject({ success: false, reason: 'turnstile_unavailable' });
+    expect(check.success || check.response.status).toBe(503);
+    expect(onUnavailable).toHaveBeenCalledWith(
+      expect.objectContaining({ errorCodes: ['invalid-input-secret'] }),
+    );
+  });
+
   it('can be configured to fail open instead', async () => {
     server.use(siteverifyHandler(true, { status: 500 }));
 

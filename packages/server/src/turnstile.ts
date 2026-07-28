@@ -53,9 +53,10 @@ export interface TurnstileChallenge {
 
 /**
  * `rejected` means Cloudflare or a local check refused the token — the visitor failed.
- * `unavailable` means the verdict is unknown because siteverify could not be reached or
- * answered nonsense. The two carry different fail policies, so they stay distinct rather
- * than collapsing into one falsy result.
+ * `unavailable` means the verdict is unknown: siteverify could not be reached, answered
+ * nonsense, or was never in a position to judge because the request it was sent was
+ * unusable. The two carry different fail policies, so they stay distinct rather than
+ * collapsing into one falsy result.
  */
 export type TurnstileVerification =
   | { readonly success: true; readonly challenge: TurnstileChallenge }
@@ -118,8 +119,21 @@ interface SiteverifyResponse {
   metadata?: unknown;
 }
 
-/** Cloudflare documents `internal-error` as retryable, so it is our problem, not the visitor's. */
-const UNAVAILABLE_ERROR_CODES = new Set(['internal-error']);
+/**
+ * Error codes that say nothing about the visitor.
+ *
+ * `internal-error` is Cloudflare's own, documented as retryable. The other three are ours: a
+ * secret key that is missing or wrong, or a request Cloudflare could not parse, all mean the
+ * question about this visitor was never asked, and `rejected` would be blaming them for it.
+ * The practical difference is a 503 carrying the codes to `onUnavailable`, rather than a 403
+ * indistinguishable from a site where every visitor has suddenly started failing.
+ */
+const UNAVAILABLE_ERROR_CODES = new Set([
+  'internal-error',
+  'missing-input-secret',
+  'invalid-input-secret',
+  'bad-request',
+]);
 
 /**
  * Verifies a Turnstile token against Cloudflare's siteverify endpoint.
