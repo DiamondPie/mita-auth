@@ -46,7 +46,12 @@ jobs:
       # vue-3-3, server-edge and playground jobs judge a host environment instead; a red
       # one of those is a compatibility bug, not an unpublishable package, and direct
       # pushes to `main` are what branch protection is for.
-      - run: pnpm turbo run typecheck test check:exports lint:publish --filter="./packages/*"
+      - run: pnpm turbo run typecheck check:exports lint:publish --filter="./packages/*"
+
+      # `test` gets its own step because CI runs it that way and CI is the green one. Folded
+      # into the call above, turbo hands two cores to ~19 tasks at once, and tests that take
+      # well under a second anywhere else start losing to their wall-clock budgets.
+      - run: pnpm turbo run test --filter="./packages/*"
 
       - name: Create release PR or publish
         uses: changesets/action@v1
