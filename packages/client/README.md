@@ -91,7 +91,10 @@ people should reach**.
   your bursts get — per call or for the whole instance, both are honoured — or give
   independent bursts their own client. An attempt that can be seen up front not to fit is
   rejected with a `MitaError` whose code is `client.queue_saturated`, rather than being sent
-  and reported as a timeout it never had a chance to beat.
+  and reported as a timeout it never had a chance to beat. The budget weighed is
+  `min(timeout, totalTimeout)`, since ky charges an attempt against both, and a request with
+  nothing ahead of it is never refused this way — it has the whole budget, and ky's own
+  timer is the judge of that.
 - **One Turnstile token per submission.** Sending it spends it; the widget watches for that
   and asks the visitor's browser for a fresh challenge without being told. This happens when
   the request goes out, not when it succeeds, so a rejection the server made *before*

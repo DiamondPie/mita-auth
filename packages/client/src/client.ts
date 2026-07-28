@@ -173,9 +173,16 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
     budget: number | undefined,
     send: NonNullable<Options['fetch']>,
   ): Promise<Response> => {
-    // Only armed once a round trip has been observed; a lone request cannot queue behind
-    // anything, so there is nothing to predict before the first one comes back.
-    if (budget !== undefined && lastRtt !== undefined && (queueDepth + 1) * lastRtt > budget) {
+    // Only armed once a round trip has been observed, and only against a queue with
+    // something in it. A request that queues behind nothing is not a queueing problem:
+    // whatever `lastRtt` says, it has the whole budget to itself, and ky's own timer is the
+    // honest judge of whether that is enough. Refusing it here could only ever be wrong.
+    if (
+      budget !== undefined &&
+      lastRtt !== undefined &&
+      queueDepth > 0 &&
+      (queueDepth + 1) * lastRtt > budget
+    ) {
       // Refused before joining the queue, so it does not deepen the saturation it reports.
       // Rejecting rather than throwing also lets ky clear the timer it armed for this attempt.
       return Promise.reject(

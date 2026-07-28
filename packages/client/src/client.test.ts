@@ -400,6 +400,28 @@ describe('createProtectedClient', () => {
       expect(responses.map((response) => response.status)).toEqual([200, 200]);
     });
 
+    // A cold start leaves exactly one sample behind, and it can be an outlier. Weighing a
+    // request that queues behind nothing against it refuses a request the budget may well
+    // have covered — and ky's timer is right there to decide that honestly.
+    it('sends a request that queues behind nothing, however slow the last one was', async () => {
+      let issued = 0;
+      const network = vi.fn(async () => {
+        issued += 1;
+        await new Promise((resolve) => setTimeout(resolve, issued === 1 ? SLOW_RTT_MS : 0));
+
+        return accepted(`nonce-${issued}`);
+      });
+      const api = client({ fetch: network });
+
+      // One slow round trip on record, and now a budget narrower than it.
+      await api.post(API_URL);
+
+      await expect(api.post(API_URL, { timeout: SLOW_RTT_MS - 20 })).resolves.toMatchObject({
+        status: 200,
+      });
+      expect(network).toHaveBeenCalledTimes(2);
+    });
+
     // ky cuts every attempt at `min(timeout, what is left of totalTimeout)`. Reading only
     // `timeout` switched the check off for a call that still had a deadline to miss.
     it('sees a totalTimeout that no per-attempt timeout stands in front of', async () => {
