@@ -111,6 +111,11 @@ review, one string to grep for before a deploy.
   Named, it is the only header consulted and its value is taken whole; if it is absent the
   request falls to the shared bucket rather than back to the guess. It applies to
   `turnstile.remoteIp` as well, which asks the same question of the same request.
+
+  It reaches only the limiter the guard builds itself. Hand it a `rateLimiter` — as the
+  section above does — and that limiter keeps its own resolver, so pass the header there
+  too: `createRateLimiter` and `createMemoryRateLimiter` both take `clientIpHeader`. Left
+  off, the limiter goes on guessing while `turnstile.remoteIp` does not.
 - **With no usable header present at all, every request shares one bucket.** Requests the
   identifier cannot place fall back to a single shared key, deliberately — failing open per
   visitor would be worse. But on an un-proxied deployment *no* request carries an IP header,

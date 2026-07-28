@@ -162,7 +162,11 @@ export interface CreateSecurityGuardOptions {
    * deployment, not about one check: the rate limiter and `turnstile.remoteIp` ask the same
    * question of the same request, and two fields would only invite two answers.
    *
-   * `rateLimit.identifier` still wins over it — that replaces the resolver outright.
+   * Two things are outside its reach, both because they are resolvers this never built:
+   * `rateLimit.identifier`, which replaces the default one outright, and a {@link rateLimiter}
+   * supplied ready-made — pass the same header to `createRateLimiter` or
+   * `createMemoryRateLimiter`, which take it under this name, or the limiter will go on
+   * guessing while `turnstile.remoteIp` does not.
    */
   clientIpHeader?: string;
   rateLimit?: GuardRateLimitOptions;

@@ -270,6 +270,23 @@ describe('clientIpHeader', () => {
     expect(check).toMatchObject({ success: true, identifier: UNIDENTIFIED_RATE_LIMIT_KEY });
   });
 
+  // It configures the limiter the guard builds, and a ready-made one was built elsewhere.
+  // Worth pinning: this is the shape of the "one deployment, two answers" the field exists
+  // to prevent, and the only defence against it is saying so in the docs.
+  it('does not reach a rate limiter supplied ready-made', async () => {
+    const instance = createSecurityGuard({
+      rateLimiter: createMemoryRateLimiter(),
+      clientIpHeader: 'x-real-ip',
+    });
+
+    const check = await instance.verify(
+      plainRequest({ 'x-real-ip': '203.0.113.9' }),
+    );
+
+    // `cf-connecting-ip` won the guess, exactly as it would have without the field.
+    expect(check).toMatchObject({ success: true, identifier: '198.51.100.1' });
+  });
+
   it('leaves a supplied rateLimit.identifier in charge', async () => {
     const check = await guard({
       clientIpHeader: 'x-real-ip',
