@@ -256,8 +256,24 @@ export function createProtectedClient(options: CreateProtectedClientOptions = {}
           // them and before it constructs anything from them. Reading `timeout` off the
           // instance instead would refuse bursts that a call raising its own budget had
           // every chance of finishing.
-          const budget =
-            callOptions.timeout === false ? undefined : (callOptions.timeout ?? DEFAULT_KY_TIMEOUT);
+          //
+          // ky charges each attempt against `min(timeout, what is left of totalTimeout)`, so
+          // a prediction that reads only one of the two is wrong in both directions:
+          // `timeout: false` on its own would switch the check off while ky still cuts the
+          // call short at `totalTimeout`, and reading `timeout` while both are set would
+          // over-estimate the room left. Weighing the whole call's budget against a single
+          // attempt is conservative, and conservative the right way round — better to hold
+          // one request back than to send one that cannot finish.
+          const perAttempt =
+            callOptions.timeout === false
+              ? Number.POSITIVE_INFINITY
+              : (callOptions.timeout ?? DEFAULT_KY_TIMEOUT);
+          const total =
+            callOptions.totalTimeout === undefined || callOptions.totalTimeout === false
+              ? Number.POSITIVE_INFINITY
+              : callOptions.totalTimeout;
+          const ceiling = Math.min(perAttempt, total);
+          const budget = Number.isFinite(ceiling) ? ceiling : undefined;
           const send = callOptions.fetch ?? baseFetch;
 
           // ky hands its `fetch` a `Request` on every attempt; the option's wider signature

@@ -399,6 +399,42 @@ describe('createProtectedClient', () => {
 
       expect(responses.map((response) => response.status)).toEqual([200, 200]);
     });
+
+    // ky cuts every attempt at `min(timeout, what is left of totalTimeout)`. Reading only
+    // `timeout` switched the check off for a call that still had a deadline to miss.
+    it('sees a totalTimeout that no per-attempt timeout stands in front of', async () => {
+      const api = client({
+        timeout: false,
+        totalTimeout: SATURATED_TIMEOUT_MS,
+        fetch: slowNetwork(),
+      });
+
+      await api.post(API_URL);
+
+      const [, second] = await Promise.allSettled([api.post(API_URL), api.post(API_URL)]);
+
+      expect(second).toMatchObject({
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'client.queue_saturated' }),
+      });
+    });
+
+    it('weighs the queue against whichever of the two budgets binds first', async () => {
+      const api = client({
+        timeout: 60_000,
+        totalTimeout: SATURATED_TIMEOUT_MS,
+        fetch: slowNetwork(),
+      });
+
+      await api.post(API_URL);
+
+      const [, second] = await Promise.allSettled([api.post(API_URL), api.post(API_URL)]);
+
+      expect(second).toMatchObject({
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'client.queue_saturated' }),
+      });
+    });
   });
 
   describe('unauthorized', () => {
