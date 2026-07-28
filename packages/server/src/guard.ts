@@ -150,6 +150,19 @@ export interface CreateSecurityGuardOptions {
   rateLimiter?: RateLimiter;
   /** A replay store to use instead of building a Redis-backed one. Same as above. */
   replayStore?: ReplayStore;
+  /**
+   * The one header this deployment's proxy is known to overwrite, e.g. `'cf-connecting-ip'`
+   * on Cloudflare or `'x-real-ip'` on Vercel. Without it {@link resolveClientIp} guesses,
+   * trying a fixed list in an order that is right behind Cloudflare and wrong nearly
+   * everywhere else.
+   *
+   * It sits here rather than under {@link rateLimit} because it is a fact about the
+   * deployment, not about one check: the rate limiter and `turnstile.remoteIp` ask the same
+   * question of the same request, and two fields would only invite two answers.
+   *
+   * `rateLimit.identifier` still wins over it — that replaces the resolver outright.
+   */
+  clientIpHeader?: string;
   rateLimit?: GuardRateLimitOptions;
   /** Enables Turnstile verification. Omit to skip it. */
   turnstile?: GuardTurnstileOptions;
@@ -187,7 +200,14 @@ export interface SecurityGuard {
  * bad proof no longer costs a round trip to Cloudflare.
  */
 export function createSecurityGuard(options: CreateSecurityGuardOptions): SecurityGuard {
-  const { rateLimit = {}, turnstile, dpop, resolveUrl = (request) => request.url, now } = options;
+  const {
+    rateLimit = {},
+    clientIpHeader,
+    turnstile,
+    dpop,
+    resolveUrl = (request) => request.url,
+    now,
+  } = options;
 
   const client = resolveRedis(options.redis);
 
@@ -206,7 +226,12 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
   const dpopOptions: GuardDPoPOptions | undefined = dpop === true ? {} : dpop;
 
   const rateLimiter =
-    options.rateLimiter ?? createRateLimiter({ redis: requireRedis('rateLimiter'), ...rateLimit });
+    options.rateLimiter ??
+    createRateLimiter({
+      redis: requireRedis('rateLimiter'),
+      ...(clientIpHeader === undefined ? {} : { clientIpHeader }),
+      ...rateLimit,
+    });
   const replayStore =
     options.replayStore ??
     createReplayStore({
@@ -270,6 +295,7 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
         request,
         token,
         turnstile,
+        clientIpHeader,
         now?.(),
         decision.pending,
       );
@@ -450,6 +476,7 @@ async function runTurnstile(
   request: Request,
   token: string | null,
   options: GuardTurnstileOptions | undefined,
+  clientIpHeader: string | undefined,
   now: number | undefined,
   pending: Promise<unknown>,
 ): Promise<TurnstileOutcome> {
@@ -457,7 +484,7 @@ async function runTurnstile(
     return { failure: null };
   }
 
-  const remoteIp = resolveRemoteIp(request, options.remoteIp);
+  const remoteIp = resolveRemoteIp(request, options.remoteIp, clientIpHeader);
 
   const result = await verifyTurnstileToken({
     secretKey: options.secretKey,
@@ -502,12 +529,14 @@ async function runTurnstile(
 function resolveRemoteIp(
   request: Request,
   remoteIp: GuardTurnstileOptions['remoteIp'],
+  clientIpHeader: string | undefined,
 ): string | null {
   if (remoteIp === undefined || remoteIp === false) {
     return null;
   }
 
-  const resolved = remoteIp === true ? resolveClientIp(request) : remoteIp(request);
+  const resolved =
+    remoteIp === true ? resolveClientIp(request, clientIpHeader) : remoteIp(request);
 
   return resolved === null || resolved === undefined || resolved === '' ? null : resolved;
 }

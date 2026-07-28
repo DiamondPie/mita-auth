@@ -159,6 +159,16 @@ describe('createMemoryRateLimiter', () => {
     });
   });
 
+  // Same resolver as the Redis-backed limiter, so a header named wrongly shows up in local
+  // development rather than after a deploy.
+  it('buckets by the named header instead of guessing', async () => {
+    const limiter = createMemoryRateLimiter({ clientIpHeader: 'x-real-ip' });
+
+    await expect(
+      limiter.limit(request({ 'cf-connecting-ip': '1.1.1.1', 'x-real-ip': '2.2.2.2' })),
+    ).resolves.toMatchObject({ identifier: '2.2.2.2' });
+  });
+
   it.each([
     ['null', () => null],
     ['undefined', () => undefined],

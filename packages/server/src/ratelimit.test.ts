@@ -84,6 +84,37 @@ describe('resolveClientIp', () => {
   it('returns null when no proxy header is present', () => {
     expect(resolveClientIp(request())).toBeNull();
   });
+
+  describe('with a named header', () => {
+    it('reads that one and ignores the rest of the list', () => {
+      const headers = {
+        'cf-connecting-ip': '198.51.100.1',
+        'x-real-ip': '198.51.100.2',
+        'x-forwarded-for': '198.51.100.3',
+      };
+
+      expect(resolveClientIp(request(headers), 'x-real-ip')).toBe('198.51.100.2');
+    });
+
+    // Naming a header says a proxy overwrites it, and a comma in a value like that is part
+    // of the value rather than a forwarding chain.
+    it('takes the value whole rather than splitting a chain out of it', () => {
+      const headers = { 'x-forwarded-for': '198.51.100.3, 10.0.0.1' };
+
+      expect(resolveClientIp(request(headers), 'x-forwarded-for')).toBe('198.51.100.3, 10.0.0.1');
+    });
+
+    // Falling back would hide a misconfigured proxy behind a header the visitor can set.
+    it('returns null rather than falling back to the list', () => {
+      const headers = { 'cf-connecting-ip': '198.51.100.1' };
+
+      expect(resolveClientIp(request(headers), 'x-real-ip')).toBeNull();
+    });
+
+    it('treats a header present but empty as absent', () => {
+      expect(resolveClientIp(request({ 'x-real-ip': '  ' }), 'x-real-ip')).toBeNull();
+    });
+  });
 });
 
 describe('createRateLimiter', () => {
@@ -123,6 +154,29 @@ describe('createRateLimiter', () => {
     const decision = await limiter().limit(request());
 
     expect(decision.identifier).toBe(UNIDENTIFIED_RATE_LIMIT_KEY);
+  });
+
+  it('buckets by the named header instead of guessing', async () => {
+    server.use(scriptResult(9));
+
+    const decision = await limiter({ clientIpHeader: 'x-real-ip' }).limit(
+      request({ 'cf-connecting-ip': '198.51.100.1', 'x-real-ip': '198.51.100.2' }),
+    );
+
+    expect(decision.identifier).toBe('198.51.100.2');
+  });
+
+  // `identifier` replaces the resolver outright, so there is nothing left for the header to
+  // configure.
+  it('lets a custom identifier win over the named header', async () => {
+    server.use(scriptResult(9));
+
+    const decision = await limiter({
+      clientIpHeader: 'x-real-ip',
+      identifier: () => 'tenant-7',
+    }).limit(request({ 'x-real-ip': '198.51.100.2' }));
+
+    expect(decision.identifier).toBe('tenant-7');
   });
 
   it('honours a custom identifier', async () => {

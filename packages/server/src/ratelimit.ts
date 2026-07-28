@@ -16,9 +16,11 @@ export const UNIDENTIFIED_RATE_LIMIT_KEY = 'mita:unidentified';
 /**
  * Headers consulted in order to derive the client IP; the first one present wins.
  *
- * Every one of these is client-supplied unless a trusted proxy overwrites it. Behind
- * Cloudflare or Vercel that is guaranteed; on a bare Node server it is not, and the
- * deployment must either strip them at the edge or pass its own `identifier`.
+ * Every one of these is client-supplied unless a trusted proxy overwrites it, and the order
+ * is a guess at which proxy is in front. It is fixed, so it cannot know which header *this*
+ * deployment's proxy is the one overwriting — behind anything but Cloudflare, a header the
+ * visitor set can win over the header the platform set. Naming the right one through
+ * `clientIpHeader` is the only way to be sure.
  */
 export const CLIENT_IP_HEADERS = ['cf-connecting-ip', 'x-real-ip', 'x-forwarded-for'] as const;
 
@@ -58,6 +60,14 @@ export interface CreateRateLimiterOptions {
   /** Key prefix in Redis. Defaults to `@upstash/ratelimit`. */
   prefix?: string;
   /**
+   * The one header this deployment's proxy is known to overwrite. Without it the default
+   * identifier guesses, trying {@link CLIENT_IP_HEADERS} in a fixed order that is right
+   * behind Cloudflare and wrong nearly everywhere else.
+   *
+   * Ignored when {@link identifier} is supplied — that replaces the resolver this configures.
+   */
+  clientIpHeader?: string;
+  /**
    * Derives the bucket key from the request. Returning `null` or `undefined` falls back
    * to {@link UNIDENTIFIED_RATE_LIMIT_KEY}. Defaults to {@link resolveClientIp}.
    */
@@ -83,18 +93,34 @@ export interface RateLimiter {
 /**
  * Reads the client IP from the usual proxy headers.
  *
- * Returns `null` when none is present, which the limiter maps to the shared
+ * With `header`, only that one is consulted and its value is taken whole: naming a header is
+ * a statement that this deployment's proxy controls it, and a comma in a value like that is
+ * data rather than a chain. Without it, {@link CLIENT_IP_HEADERS} are tried in order.
+ *
+ * Returns `null` when nothing usable was found, which the limiter maps to the shared
  * unidentified bucket.
  */
-export function resolveClientIp(request: Request): string | null {
-  for (const header of CLIENT_IP_HEADERS) {
-    const value = request.headers.get(header);
+export function resolveClientIp(request: Request, header?: string): string | null {
+  if (header !== undefined) {
+    const value = request.headers.get(header)?.trim();
+
+    // Not falling back to the list: a deployment that named a header and did not get it is
+    // one whose proxy is misconfigured, and guessing would hide that behind a header the
+    // visitor is free to set.
+    return value === undefined || value.length === 0 ? null : value;
+  }
+
+  for (const name of CLIENT_IP_HEADERS) {
+    const value = request.headers.get(name);
 
     if (value === null) {
       continue;
     }
 
-    // `X-Forwarded-For` is a chain; the left-most entry is the original client.
+    // `X-Forwarded-For` is a chain. The left-most entry is the original client only when the
+    // proxy in front overwrites the header; a proxy that appends — which nginx's own
+    // `$proxy_add_x_forwarded_for` example does — leaves whatever the client sent sitting
+    // there, and this reads that instead.
     const candidate = value.split(',')[0]?.trim();
 
     if (candidate !== undefined && candidate.length > 0) {
@@ -118,7 +144,8 @@ export function createRateLimiter(options: CreateRateLimiterOptions): RateLimite
     window = DEFAULT_RATE_LIMIT_WINDOW,
     limiter = Ratelimit.slidingWindow(requests, window),
     prefix,
-    identifier = resolveClientIp,
+    clientIpHeader,
+    identifier = (request: Request) => resolveClientIp(request, clientIpHeader),
     failureMode = 'open',
     timeoutMs = DEFAULT_RATE_LIMIT_TIMEOUT_MS,
     onDegraded,

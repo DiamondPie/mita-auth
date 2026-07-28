@@ -12,6 +12,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, t
 
 import { createSecurityGuard, type CreateSecurityGuardOptions } from './guard';
 import { createMemoryRateLimiter, createMemoryReplayStore } from './memory';
+import { UNIDENTIFIED_RATE_LIMIT_KEY } from './ratelimit';
 import { TURNSTILE_SITEVERIFY_ENDPOINT } from './turnstile';
 
 const REDIS_URL = 'https://guard.upstash.test';
@@ -244,6 +245,38 @@ describe('rate limiting', () => {
 
     expect(check).toMatchObject({ success: false, reason: 'rate_limit_unavailable' });
     expect(check.success || check.response.status).toBe(503);
+  });
+});
+
+describe('clientIpHeader', () => {
+  // One field because it is one deployment fact: the bucket the limiter charges and the IP
+  // Cloudflare is handed are the same question about the same request. `cf-connecting-ip` is
+  // on every request here and would otherwise have won the fixed order.
+  it('reaches the rate limiter and turnstile.remoteIp alike', async () => {
+    const check = await guard({
+      clientIpHeader: 'x-real-ip',
+      turnstile: { secretKey: 'secret', remoteIp: true },
+    }).verify(plainRequest({ 'x-real-ip': '203.0.113.9', 'x-mita-turnstile': TURNSTILE_TOKEN }));
+
+    expect(check).toMatchObject({ success: true, identifier: '203.0.113.9' });
+    expect(siteverifyBody?.get('remoteip')).toBe('203.0.113.9');
+  });
+
+  // Naming a header the proxy does not set is a misconfiguration, and falling back to a
+  // header the visitor controls would hide it.
+  it('does not fall back to the guessed list when the named header is absent', async () => {
+    const check = await guard({ clientIpHeader: 'x-real-ip' }).verify(plainRequest());
+
+    expect(check).toMatchObject({ success: true, identifier: UNIDENTIFIED_RATE_LIMIT_KEY });
+  });
+
+  it('leaves a supplied rateLimit.identifier in charge', async () => {
+    const check = await guard({
+      clientIpHeader: 'x-real-ip',
+      rateLimit: { identifier: () => 'tenant-7' },
+    }).verify(plainRequest({ 'x-real-ip': '203.0.113.9' }));
+
+    expect(check).toMatchObject({ success: true, identifier: 'tenant-7' });
   });
 });
 

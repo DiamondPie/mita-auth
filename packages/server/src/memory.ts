@@ -57,6 +57,14 @@ export interface CreateMemoryRateLimiterOptions {
   /** Window length, e.g. `'1 m'` or `'10 s'`. Defaults to `'1 m'`. */
   window?: Duration;
   /**
+   * The one header this deployment's proxy is known to overwrite, as on the Redis-backed
+   * limiter. Carried here so that local development exercises the same resolver: a header
+   * named wrongly should be visible before a deploy, not after it.
+   *
+   * Ignored when {@link identifier} is supplied.
+   */
+  clientIpHeader?: string;
+  /**
    * Derives the bucket key from the request. Anything unusable — `null`, `undefined` or an
    * empty string — falls back to {@link UNIDENTIFIED_RATE_LIMIT_KEY}.
    */
@@ -125,7 +133,8 @@ export function createMemoryRateLimiter(options: CreateMemoryRateLimiterOptions 
   const {
     requests = DEFAULT_RATE_LIMIT_REQUESTS,
     window = DEFAULT_RATE_LIMIT_WINDOW,
-    identifier = resolveClientIp,
+    clientIpHeader,
+    identifier = (request: Request) => resolveClientIp(request, clientIpHeader),
     now = Date.now,
   } = options;
 
