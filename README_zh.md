@@ -3,11 +3,29 @@
 **一套开箱即用、框架无关（Framework-agnostic）的鉴权与反爬（Anti-abuse）防护 SDK。**
 一次编写核心逻辑，同时适配 Next.js / Nuxt / React / Vue / 原生 JS，供个人主页与后续所有项目复用。
 
-> 状态：🚧 开发中 — 五个包（`@mita-auth/core`、`@mita-auth/server`、`@mita-auth/client`、`@mita-auth/react`、`@mita-auth/vue`）均已完成，[Next.js + Nuxt playground](./apps/playground) 已验证「零框架适配代码」的承诺：两个 demo 共用六个逐字节相同的业务模块，SDK 触碰面仅 4 处差异且全部是框架惯例。`@mita-auth/server` 随后在 Cloudflare Workers 与 Vercel Edge 上实测过：同一条 guard 链路逐行一致，不改一行源码，也不需要 `nodejs_compat`。接下来是发布；尚未发布到 npm。
+[![core](https://img.shields.io/npm/v/@mita-auth/core?label=core)](https://www.npmjs.com/package/@mita-auth/core)
+[![server](https://img.shields.io/npm/v/@mita-auth/server?label=server)](https://www.npmjs.com/package/@mita-auth/server)
+[![client](https://img.shields.io/npm/v/@mita-auth/client?label=client)](https://www.npmjs.com/package/@mita-auth/client)
+[![react](https://img.shields.io/npm/v/@mita-auth/react?label=react)](https://www.npmjs.com/package/@mita-auth/react)
+[![vue](https://img.shields.io/npm/v/@mita-auth/vue?label=vue)](https://www.npmjs.com/package/@mita-auth/vue)
+[![license](https://img.shields.io/npm/l/@mita-auth/core)](./LICENSE)
+
+> 状态：五个包均已发布到 npm。[Next.js + Nuxt playground](./apps/playground) 已验证「零框架适配代码」的承诺：两个 demo 共用六个逐字节相同的业务模块，SDK 触碰面仅 4 处差异且全部是框架惯例。`@mita-auth/server` 在 Cloudflare Workers 与 Vercel Edge 上实测过：同一条 guard 链路逐行一致，不改一行源码，也不需要 `nodejs_compat`。
 
 *[English version](./README.md)*
 
 ---
+
+## 安装
+
+装上服务端 guard 与浏览器客户端即可；框架绑定按需引入，`@mita-auth/core` 会作为它们的依赖一并装上。
+
+```sh
+npm i @mita-auth/server @mita-auth/client
+npm i @mita-auth/react   # 或 @mita-auth/vue
+```
+
+需要 Node.js 22+，或任何在 `globalThis` 上暴露 WebCrypto 的运行时——Cloudflare Workers、Vercel Edge、Deno、现代浏览器。
 
 ## 这是什么
 
