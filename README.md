@@ -3,11 +3,29 @@
 **A batteries-included, framework-agnostic authentication & anti-abuse protection SDK.**
 Write the core logic once, and it works across Next.js / Nuxt / React / Vue / vanilla JS — built to be reused across your personal site and every project after it.
 
-> Status: 🚧 In development — all five packages (`@mita-auth/core`, `@mita-auth/server`, `@mita-auth/client`, `@mita-auth/react`, `@mita-auth/vue`) are complete, and the [Next.js + Nuxt playground](./apps/playground) confirms the zero-framework-adaptation claim: the two demos share six byte-identical business modules, and their SDK-touching code differs in four places, all framework idiom. `@mita-auth/server` has since been measured on Cloudflare Workers and Vercel Edge — the same guard chain, line for line, with no source change and no `nodejs_compat` flag. Publishing is next. Nothing is on npm yet.
+[![core](https://img.shields.io/npm/v/@mita-auth/core?label=core)](https://www.npmjs.com/package/@mita-auth/core)
+[![server](https://img.shields.io/npm/v/@mita-auth/server?label=server)](https://www.npmjs.com/package/@mita-auth/server)
+[![client](https://img.shields.io/npm/v/@mita-auth/client?label=client)](https://www.npmjs.com/package/@mita-auth/client)
+[![react](https://img.shields.io/npm/v/@mita-auth/react?label=react)](https://www.npmjs.com/package/@mita-auth/react)
+[![vue](https://img.shields.io/npm/v/@mita-auth/vue?label=vue)](https://www.npmjs.com/package/@mita-auth/vue)
+[![license](https://img.shields.io/npm/l/@mita-auth/core)](./LICENSE)
+
+> Status: all five packages are on npm. The [Next.js + Nuxt playground](./apps/playground) confirms the zero-framework-adaptation claim: the two demos share six byte-identical business modules, and their SDK-touching code differs in four places, all framework idiom. `@mita-auth/server` has been measured on Cloudflare Workers and Vercel Edge — the same guard chain, line for line, with no source change and no `nodejs_compat` flag.
 
 *[中文版 / Chinese version](./README_zh.md)*
 
 ---
+
+## Install
+
+Take the server guard and the browser client; a framework binding is optional, and `@mita-auth/core` arrives as their dependency.
+
+```sh
+npm i @mita-auth/server @mita-auth/client
+npm i @mita-auth/react   # or @mita-auth/vue
+```
+
+Node.js 22+, or any runtime that exposes WebCrypto on `globalThis` — Cloudflare Workers, Vercel Edge, Deno, modern browsers.
 
 ## What is this
 
