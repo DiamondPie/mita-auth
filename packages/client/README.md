@@ -105,6 +105,10 @@ people should reach**.
   session.
 - Importing the main entry on a server is harmless: the element module falls back to an
   empty base class where `HTMLElement` is absent.
+- **Build the client from browser code.** The stores are module-level, which in a tab means
+  one per page and in a server process means one shared by every request it handles.
+  Creating the client — or letting a request run — during SSR leaks one visitor's session
+  state into the next. Construct it lazily from an event handler, not at module scope.
 
 ## License
 
