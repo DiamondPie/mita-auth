@@ -63,6 +63,9 @@ const guard = createSecurityGuard({
 Everything else behaves the same — same sliding window, same single-use nonces, same
 `verify()`.
 
+Only DPoP touches the replay store, and it is built on demand: a guard that omits `dpop`
+never asks for one, so rate limiting plus Turnstile needs neither `replayStore` nor `redis`.
+
 **Never ship this.** Both stores live in one instance's memory: a second instance shares
 nothing with the first, so the rate limit divides by however many are running, and a spent
 nonce becomes redeemable again as soon as the instance that spent it goes away — which on

@@ -141,7 +141,8 @@ export interface CreateSecurityGuardOptions {
    * `@upstash/redis`, `/cloudflare` and `/fastly` are structurally identical.
    *
    * Optional only because {@link rateLimiter} and {@link replayStore} can be supplied
-   * ready-made; whichever of the two is left to be built needs this.
+   * ready-made; whichever of the two is left to be built needs this. The replay store is
+   * built on demand, so a guard with {@link dpop} omitted never asks for one at all.
    */
   redis?: Redis | { url: string; token: string };
   /**
@@ -233,24 +234,42 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
       ...(clientIpHeader === undefined ? {} : { clientIpHeader }),
       ...rateLimit,
     });
-  const replayStore =
-    options.replayStore ??
-    createReplayStore({
-      redis: requireRedis('replayStore'),
-      ...(dpopOptions?.prefix === undefined ? {} : { prefix: dpopOptions.prefix }),
-      ...(dpopOptions?.nonceTtlMs === undefined ? {} : { nonceTtlMs: dpopOptions.nonceTtlMs }),
-      ...(dpopOptions?.timeoutMs === undefined ? {} : { timeoutMs: dpopOptions.timeoutMs }),
-      ...(dpopOptions?.onUnavailable === undefined
-        ? {}
-        : { onUnavailable: dpopOptions.onUnavailable }),
-      proofTtlMs: proofLifetimeMs(dpopOptions),
-    });
+  let replayStoreInstance: ReplayStore | undefined;
+
+  /**
+   * Built on demand rather than up front. `verify()` reaches for it only when DPoP is on,
+   * and a guard that wants nothing but rate limiting and Turnstile should not be asked for a
+   * Redis client to satisfy a dependency it never touches.
+   */
+  const resolveReplayStore = (): ReplayStore =>
+    (replayStoreInstance ??=
+      options.replayStore ??
+      createReplayStore({
+        redis: requireRedis('replayStore'),
+        ...(dpopOptions?.prefix === undefined ? {} : { prefix: dpopOptions.prefix }),
+        ...(dpopOptions?.nonceTtlMs === undefined ? {} : { nonceTtlMs: dpopOptions.nonceTtlMs }),
+        ...(dpopOptions?.timeoutMs === undefined ? {} : { timeoutMs: dpopOptions.timeoutMs }),
+        ...(dpopOptions?.onUnavailable === undefined
+          ? {}
+          : { onUnavailable: dpopOptions.onUnavailable }),
+        proofTtlMs: proofLifetimeMs(dpopOptions),
+      }));
+
+  // DPoP is the one switch that guarantees `verify()` will need it, so that case keeps the
+  // property `requireRedis` is written for: refused while the guard is being built, rather
+  // than at a first request where an absent client would read as an outage.
+  if (dpopOptions !== undefined) {
+    resolveReplayStore();
+  }
 
   const algorithms = dpopOptions?.algorithms ?? SUPPORTED_DPOP_ALGORITHMS;
 
   return {
     rateLimiter,
-    replayStore,
+
+    get replayStore() {
+      return resolveReplayStore();
+    },
 
     async verify(request) {
       const decision = await rateLimiter.limit(request);
@@ -283,7 +302,8 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
               options: dpopOptions,
               url: resolveUrl(request),
               algorithms,
-              replayStore,
+              // Called rather than read off `this`, which an object literal cannot type.
+              replayStore: resolveReplayStore(),
               now: now?.(),
               pending: decision.pending,
             });
@@ -309,7 +329,7 @@ export function createSecurityGuard(options: CreateSecurityGuardOptions): Securi
       const headers = new Headers();
 
       if (proof !== undefined) {
-        const issued = await replayStore.issueNonce();
+        const issued = await resolveReplayStore().issueNonce();
 
         if (!issued.ok) {
           return failure(

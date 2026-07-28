@@ -763,12 +763,35 @@ describe('composition', () => {
     });
 
     // Refused while the guard is being built, rather than at the first request, where an
-    // absent client would look like an outage.
+    // absent client would look like an outage. DPoP is what guarantees `verify()` will reach
+    // for the replay store, so it is what makes that one worth refusing up front.
     it('names the store it still needs when Redis is absent', () => {
       expect(() => createSecurityGuard({})).toThrow(/rateLimiter/);
-      expect(() => createSecurityGuard({ rateLimiter: createMemoryRateLimiter() })).toThrow(
-        /replayStore/,
-      );
+      expect(() =>
+        createSecurityGuard({ rateLimiter: createMemoryRateLimiter(), dpop: true }),
+      ).toThrow(/replayStore/);
+    });
+
+    // Only DPoP touches the replay store, so a guard doing rate limiting and Turnstile should
+    // not have to produce a Redis client for a dependency it never reaches.
+    it('asks for no replay store while DPoP is off', async () => {
+      const instance = createSecurityGuard({
+        rateLimiter: createMemoryRateLimiter(),
+        turnstile: { secretKey: 'secret' },
+      });
+
+      const check = await instance.verify(plainRequest({ 'x-mita-turnstile': TURNSTILE_TOKEN }));
+
+      expect(check.success).toBe(true);
+      expect(sent).toEqual([]);
+    });
+
+    // The escape hatch is still a promise to hand one over, so that is where a guard with no
+    // way to build one has to say so.
+    it('names the store when the escape hatch reaches for one it cannot build', () => {
+      const instance = createSecurityGuard({ rateLimiter: createMemoryRateLimiter() });
+
+      expect(() => instance.replayStore).toThrow(/replayStore/);
     });
   });
 
